@@ -9,6 +9,7 @@ import RegisterForm from './components/auth/RegisterForm';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import ProfilePage from './pages/ProfilePage';
 import Unauthorized from './pages/Unauthorized';
 import NotFound from './pages/NotFound';
 import './App.css';
@@ -46,6 +47,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Profile page - authenticated users only */}
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <ProfilePage />
                 </ProtectedRoute>
               }
             />

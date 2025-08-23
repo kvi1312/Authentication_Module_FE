@@ -55,29 +55,14 @@ export interface LoginRequest {
 export interface LoginResponse {
   success: boolean;
   message: string;
-  accessToken?: string;
-  refreshToken?: string;
-  rememberMeToken?: string;
-  expiresAt?: string;
-  
-  accessTokenExpiresAt?: string;
-  refreshTokenExpiresAt?: string;
+  accessToken: string;
+  refreshToken: null;  // Always null now (in cookies)
+  rememberMeToken: null;  // Always null now (in cookies)
+  accessTokenExpiresAt: string;
+  refreshTokenExpiresAt: string;
   rememberMeTokenExpiresAt?: string;
-  
+  user: UserInfo;
   sessionId?: string;
-  user?: {
-    id: string;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    fullName: string;
-    isActive: boolean;
-    lastLoginAt?: string;
-    createdDate: string;
-    roles: string[];
-    userType: UserType;
-  };
 }
 
 export type RefreshTokenRequest = Record<string, never>;
@@ -85,14 +70,11 @@ export type RefreshTokenRequest = Record<string, never>;
 export interface RefreshTokenResponse {
   success: boolean;
   message: string;
-  accessToken?: string;
-  expiresAt?: string;
-  
-  accessTokenExpiresAt?: string;
-  refreshTokenExpiresAt?: string;
-  rememberMeTokenExpiresAt?: string;
-  
-  sessionId?: string;
+  accessToken: string;
+  refreshToken: null;  // Always null now (in cookies)
+  accessTokenExpiresAt: string;
+  refreshTokenExpiresAt: string;
+  isRememberMe: boolean;  // NEW: Indicates session type
 }
 
 export type LogoutRequest = Record<string, never>;
@@ -179,6 +161,7 @@ export interface AuthContextType {
   isAdmin: () => boolean;
   isPartner: () => boolean;
   isEndUser: () => boolean;
+  isRememberMeSession: () => boolean;
 }
 
 export interface ApiErrorResponse {

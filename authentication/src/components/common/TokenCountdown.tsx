@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Space, Tag, Button } from 'antd';
+import { Card, Typography, Space, Tag, Button, Row, Col } from 'antd';
 import { 
   ClockCircleOutlined, 
   ReloadOutlined, 
   ExclamationCircleOutlined,
   CheckCircleOutlined,
-  FieldTimeOutlined,
-  HistoryOutlined
+  FieldTimeOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../hooks/useAuth';
 import { tokenService } from '../../services/tokenService';
@@ -25,7 +24,7 @@ const TokenCountdown: React.FC = () => {
   const { logout, refreshToken } = useAuth();
   const [accessTokenTime, setAccessTokenTime] = useState<TimeRemaining | null>(null);
   const [refreshTokenTime, setRefreshTokenTime] = useState<TimeRemaining | null>(null);
-  const [rememberMeTokenTime, setRememberMeTokenTime] = useState<TimeRemaining | null>(null);
+  const [isRememberMe, setIsRememberMe] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const calculateTimeRemaining = (expiresAt: Date): TimeRemaining => {
@@ -47,51 +46,56 @@ const TokenCountdown: React.FC = () => {
   } => {
     const parts = {
       days: time.days.toString().padStart(2, '0'),
-      hours: time.hours.toString().padStart(2, '0'), 
+      hours: time.hours.toString().padStart(2, '0'),
       minutes: time.minutes.toString().padStart(2, '0'),
       seconds: time.seconds.toString().padStart(2, '0')
     };
 
     if (time.days > 0) {
-      return { 
+      return {
         display: `${parts.days}:${parts.hours}:${parts.minutes}:${parts.seconds}`,
-        parts 
+        parts
       };
     } else {
-      return { 
+      return {
         display: `${parts.hours}:${parts.minutes}:${parts.seconds}`,
-        parts 
+        parts
       };
     }
-  };
-
-  const getCountdownStyle = (totalSeconds: number) => {
-    if (totalSeconds <= 0) return { color: '#ff4d4f', backgroundColor: '#fff2f0' };
-    if (totalSeconds <= 300) return { color: '#fa8c16', backgroundColor: '#fff7e6' }; // 5 minutes
-    if (totalSeconds <= 1800) return { color: '#faad14', backgroundColor: '#fffbe6' }; // 30 minutes
-    return { color: '#52c41a', backgroundColor: '#f6ffed' };
   };
 
   const getStatusTag = (totalSeconds: number) => {
     if (totalSeconds <= 0) {
-      return <Tag color="red" icon={<ExclamationCircleOutlined />}>Expired</Tag>;
+      return <Tag color="red" icon={<ExclamationCircleOutlined />}>EXPIRED</Tag>;
     } else if (totalSeconds <= 300) { // 5 minutes
-      return <Tag color="orange" icon={<ExclamationCircleOutlined />}>Expiring Soon</Tag>;
+      return <Tag color="orange" icon={<ExclamationCircleOutlined />}>EXPIRING</Tag>;
     } else {
-      return <Tag color="green" icon={<CheckCircleOutlined />}>Active</Tag>;
+      return <Tag color="green" icon={<CheckCircleOutlined />}>ACTIVE</Tag>;
+    }
+  };
+
+  const getCountdownStyle = (totalSeconds: number) => {
+    if (totalSeconds <= 0) {
+      return { backgroundColor: '#fff2f0', color: '#ff4d4f' };
+    } else if (totalSeconds <= 300) {
+      return { backgroundColor: '#fff7e6', color: '#fa8c16' };
+    } else {
+      return { backgroundColor: '#f6ffed', color: '#52c41a' };
     }
   };
 
   const handleRefreshToken = React.useCallback(async () => {
-    setIsRefreshing(true);
+    if (isRefreshing) return;
+    
     try {
+      setIsRefreshing(true);
       await refreshToken();
-    } catch {
-      // Refresh failed
+    } catch (error) {
+      console.error('Failed to refresh token:', error);
     } finally {
       setIsRefreshing(false);
     }
-  }, [refreshToken]);
+  }, [refreshToken, isRefreshing]);
 
   const handleLogout = React.useCallback(async () => {
     await logout();
@@ -99,45 +103,34 @@ const TokenCountdown: React.FC = () => {
 
   useEffect(() => {
     const updateCountdowns = () => {
-      // Get all token expiration times
       const accessTokenExpiry = tokenService.getAccessTokenExpiry();
       const refreshTokenExpiry = tokenService.getRefreshTokenExpiry();
-      const rememberMeTokenExpiry = tokenService.getRememberMeTokenExpiry();
+      const isRememberMeActive = tokenService.isRememberMeSession();
 
       if (accessTokenExpiry) {
         const accessTime = calculateTimeRemaining(accessTokenExpiry);
         setAccessTokenTime(accessTime);
-
-        // Auto-refresh logic removed to prevent conflicts with short token lifetimes
-        // Users can manually refresh using the button below
       }
 
       if (refreshTokenExpiry) {
         const refreshTime = calculateTimeRemaining(refreshTokenExpiry);
         setRefreshTokenTime(refreshTime);
 
-        // Auto logout when refresh token expires
         if (refreshTime.totalSeconds <= 0) {
           handleLogout();
         }
       }
 
-      if (rememberMeTokenExpiry) {
-        const rememberMeTime = calculateTimeRemaining(rememberMeTokenExpiry);
-        setRememberMeTokenTime(rememberMeTime);
-      }
+      setIsRememberMe(isRememberMeActive);
     };
 
-    // Update immediately
     updateCountdowns();
-
-    // Update every second
     const interval = setInterval(updateCountdowns, 1000);
 
     return () => clearInterval(interval);
-  }, [isRefreshing, handleRefreshToken, handleLogout]); // Include all dependencies
+  }, [isRefreshing, handleRefreshToken, handleLogout]);
 
-  if (!accessTokenTime && !refreshTokenTime && !rememberMeTokenTime) {
+  if (!accessTokenTime && !refreshTokenTime) {
     return null;
   }
 
@@ -152,203 +145,166 @@ const TokenCountdown: React.FC = () => {
       size="small"
       style={{ marginBottom: '16px' }}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Row gutter={[16, 16]}>
         {/* Access Token Countdown */}
         {accessTokenTime && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <Space>
-                <ClockCircleOutlined style={{ color: '#1890ff' }} />
-                <Text strong>Access Token</Text>
-              </Space>
-              {getStatusTag(accessTokenTime.totalSeconds)}
-            </div>
-            
-            {/* Digital Clock Display */}
-            <div style={{ 
-              ...getCountdownStyle(accessTokenTime.totalSeconds),
-              padding: '16px',
-              borderRadius: '8px',
-              border: '2px solid',
-              borderColor: accessTokenTime.totalSeconds <= 300 ? '#fa8c16' : '#52c41a',
-              textAlign: 'center',
-              fontFamily: 'monospace',
-              fontSize: '24px',
-              fontWeight: 'bold',
-              letterSpacing: '2px',
-              marginBottom: '12px'
-            }}>
-              {accessTokenTime.totalSeconds > 0 ? (
-                <div>
-                  <div style={{ fontSize: '32px', marginBottom: '4px' }}>
-                    {formatTimeForClock(accessTokenTime).display}
+          <Col xs={24} md={12}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <Space>
+                  <ClockCircleOutlined style={{ color: '#1890ff' }} />
+                  <Text strong>Access Token</Text>
+                </Space>
+                {getStatusTag(accessTokenTime.totalSeconds)}
+              </div>
+              
+              <div style={{ 
+                ...getCountdownStyle(accessTokenTime.totalSeconds),
+                padding: '12px',
+                borderRadius: '8px',
+                border: '2px solid',
+                borderColor: accessTokenTime.totalSeconds <= 300 ? '#fa8c16' : '#52c41a',
+                textAlign: 'center',
+                fontFamily: 'monospace',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                letterSpacing: '1px',
+                marginBottom: '8px'
+              }}>
+                {accessTokenTime.totalSeconds > 0 ? (
+                  <div>
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>
+                      {formatTimeForClock(accessTokenTime).display}
+                    </div>
+                    <Text style={{ fontSize: '10px', opacity: 0.8 }}>
+                      {accessTokenTime.days > 0 ? 'DD:HH:MM:SS' : 'HH:MM:SS'}
+                    </Text>
                   </div>
-                  <Text style={{ fontSize: '12px', opacity: 0.8 }}>
-                    {accessTokenTime.days > 0 ? 'DD:HH:MM:SS' : 'HH:MM:SS'}
-                  </Text>
-                </div>
-              ) : (
-                <div style={{ color: '#ff4d4f' }}>
-                  <div style={{ fontSize: '32px', marginBottom: '4px' }}>
-                    EXPIRED
+                ) : (
+                  <div style={{ color: '#ff4d4f' }}>
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>
+                      EXPIRED
+                    </div>
+                    <Text style={{ fontSize: '10px', opacity: 0.8 }}>
+                      Token has expired
+                    </Text>
                   </div>
-                  <Text style={{ fontSize: '12px', opacity: 0.8 }}>
-                    Token has expired
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <Text type="secondary" style={{ fontSize: '11px' }}>
+                  {accessTokenTime.totalSeconds > 0 ? 'Expires in' : 'Expired'}
+                </Text>
+                
+                {accessTokenTime.totalSeconds <= 300 && accessTokenTime.totalSeconds > 0 && (
+                  <Text type="danger" style={{ fontSize: '10px', fontWeight: 'bold' }}>
+                    ⚠️ Expiring soon!
                   </Text>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          </Col>
         )}
 
         {/* Refresh Token Countdown */}
         {refreshTokenTime && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <Space>
-                <FieldTimeOutlined style={{ color: '#722ed1' }} />
-                <Text strong>Refresh Token</Text>
-              </Space>
-              {getStatusTag(refreshTokenTime.totalSeconds)}
-            </div>
-            
-            {/* Digital Clock Display */}
-            <div style={{ 
-              ...getCountdownStyle(refreshTokenTime.totalSeconds),
-              padding: '16px',
-              borderRadius: '8px',
-              border: '2px solid',
-              borderColor: refreshTokenTime.totalSeconds <= 3600 ? '#fa8c16' : '#722ed1',
-              textAlign: 'center',
-              fontFamily: 'monospace',
-              fontSize: '24px',
-              fontWeight: 'bold',
-              letterSpacing: '2px',
-              marginBottom: '12px'
-            }}>
-              {refreshTokenTime.totalSeconds > 0 ? (
-                <div>
-                  <div style={{ fontSize: '32px', marginBottom: '4px' }}>
-                    {formatTimeForClock(refreshTokenTime).display}
-                  </div>
-                  <Text style={{ fontSize: '12px', opacity: 0.8 }}>
-                    {refreshTokenTime.days > 0 ? 'DD:HH:MM:SS' : 'HH:MM:SS'}
-                  </Text>
-                </div>
-              ) : (
-                <div style={{ color: '#ff4d4f' }}>
-                  <div style={{ fontSize: '32px', marginBottom: '4px' }}>
-                    EXPIRED
-                  </div>
-                  <Text style={{ fontSize: '12px', opacity: 0.8 }}>
-                    Logging out...
-                  </Text>
-                </div>
-              )}
-            </div>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                {refreshTokenTime.totalSeconds > 0 ? 'Session expires in' : 'Session ended'}
-              </Text>
+          <Col xs={24} md={12}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <Space>
+                  <FieldTimeOutlined style={{ color: '#722ed1' }} />
+                  <Text strong>Refresh Token</Text>
+                </Space>
+                <Space>
+                  {getStatusTag(refreshTokenTime.totalSeconds)}
+                  <Button 
+                    type="text" 
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    loading={isRefreshing}
+                    onClick={handleRefreshToken}
+                    style={{ 
+                      padding: '4px',
+                      minWidth: 'auto',
+                      height: '24px',
+                      width: '24px'
+                    }}
+                    title="Refresh Token"
+                  />
+                </Space>
+              </div>
               
-              {refreshTokenTime.totalSeconds <= 3600 && refreshTokenTime.totalSeconds > 0 && ( // 1 hour warning
-                <Text type="danger" style={{ fontSize: '11px', fontWeight: 'bold' }}>
-                  ⚠️ Session ending soon!
+              <div style={{ 
+                ...getCountdownStyle(refreshTokenTime.totalSeconds),
+                padding: '12px',
+                borderRadius: '8px',
+                border: '2px solid',
+                borderColor: refreshTokenTime.totalSeconds <= 3600 ? '#fa8c16' : '#722ed1',
+                textAlign: 'center',
+                fontFamily: 'monospace',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                letterSpacing: '1px',
+                marginBottom: '8px'
+              }}>
+                {refreshTokenTime.totalSeconds > 0 ? (
+                  <div>
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>
+                      {formatTimeForClock(refreshTokenTime).display}
+                    </div>
+                    <Text style={{ fontSize: '10px', opacity: 0.8 }}>
+                      {refreshTokenTime.days > 0 ? 'DD:HH:MM:SS' : 'HH:MM:SS'}
+                    </Text>
+                  </div>
+                ) : (
+                  <div style={{ color: '#ff4d4f' }}>
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>
+                      EXPIRED
+                    </div>
+                    <Text style={{ fontSize: '10px', opacity: 0.8 }}>
+                      Logging out...
+                    </Text>
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <Text type="secondary" style={{ fontSize: '11px' }}>
+                  {refreshTokenTime.totalSeconds > 0 ? 'Session expires in' : 'Session ended'}
                 </Text>
-              )}
+                
+                {refreshTokenTime.totalSeconds <= 3600 && refreshTokenTime.totalSeconds > 0 && (
+                  <Text type="danger" style={{ fontSize: '10px', fontWeight: 'bold' }}>
+                    ⚠️ Session ending soon!
+                  </Text>
+                )}
+              </div>
             </div>
-          </div>
+          </Col>
         )}
 
-        {/* Remember Me Token Countdown */}
-        {rememberMeTokenTime && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <Space>
-                <HistoryOutlined style={{ color: '#52c41a' }} />
-                <Text strong>Remember Me Token</Text>
-              </Space>
-              {getStatusTag(rememberMeTokenTime.totalSeconds)}
-            </div>
-            
-            {/* Digital Clock Display */}
+        {/* Remember Me Status */}
+        {isRememberMe && (
+          <Col xs={24}>
             <div style={{ 
-              ...getCountdownStyle(rememberMeTokenTime.totalSeconds),
-              padding: '16px',
-              borderRadius: '8px',
-              border: '2px solid',
-              borderColor: rememberMeTokenTime.totalSeconds <= 86400 ? '#fa8c16' : '#52c41a', // 1 day warning
-              textAlign: 'center',
-              fontFamily: 'monospace',
-              fontSize: '24px',
-              fontWeight: 'bold',
-              letterSpacing: '2px',
-              marginBottom: '12px'
+              marginTop: '12px', 
+              padding: '8px 12px', 
+              backgroundColor: '#f6ffed', 
+              border: '1px solid #b7eb8f', 
+              borderRadius: '6px',
+              textAlign: 'center'
             }}>
-              {rememberMeTokenTime.totalSeconds > 0 ? (
-                <div>
-                  <div style={{ fontSize: '32px', marginBottom: '4px' }}>
-                    {formatTimeForClock(rememberMeTokenTime).display}
-                  </div>
-                  <Text style={{ fontSize: '12px', opacity: 0.8 }}>
-                    {rememberMeTokenTime.days > 0 ? 'DD:HH:MM:SS' : 'HH:MM:SS'}
-                  </Text>
-                </div>
-              ) : (
-                <div style={{ color: '#ff4d4f' }}>
-                  <div style={{ fontSize: '32px', marginBottom: '4px' }}>
-                    EXPIRED
-                  </div>
-                  <Text style={{ fontSize: '12px', opacity: 0.8 }}>
-                    Remember me expired
-                  </Text>
-                </div>
-              )}
-            </div>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                {rememberMeTokenTime.totalSeconds > 0 ? 'Remember me expires in' : 'Remember me ended'}
-              </Text>
-              
-              {rememberMeTokenTime.totalSeconds <= 86400 && rememberMeTokenTime.totalSeconds > 0 && ( // 1 day warning
-                <Text type="warning" style={{ fontSize: '11px', fontWeight: 'bold' }}>
-                  ⚠️ Remember me ending soon!
+              <Space>
+                <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                <Text style={{ color: '#52c41a', fontSize: '12px', fontWeight: '500' }}>
+                  Remember Me Active - Persistent Login Session
                 </Text>
-              )}
+              </Space>
             </div>
-          </div>
+          </Col>
         )}
-        
-        {/* Action Buttons */}
-        <div style={{ 
-          borderTop: '1px solid #f0f0f0', 
-          paddingTop: '16px', 
-          marginTop: '16px',
-          display: 'flex',
-          gap: '8px',
-          justifyContent: 'center'
-        }}>
-          <Button
-            type="primary"
-            icon={<ReloadOutlined />}
-            loading={isRefreshing}
-            onClick={handleRefreshToken}
-            size="small"
-          >
-            Refresh Token
-          </Button>
-          <Button
-            danger
-            icon={<ExclamationCircleOutlined />}
-            onClick={handleLogout}
-            size="small"
-          >
-            Logout
-          </Button>
-        </div>
-      </Space>
+      </Row>
     </Card>
   );
 };

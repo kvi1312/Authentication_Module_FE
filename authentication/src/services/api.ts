@@ -1,10 +1,15 @@
 import axios from 'axios';
-import type { AxiosInstance, AxiosError } from 'axios';
+import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL } from '../utils/constants';
 import type { ApiErrorResponse } from '../types/auth.types';
 
+interface RetryableRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
+
 class ApiService {
   private axiosInstance: AxiosInstance;
+  private refreshPromise: Promise<void> | null = null;
 
   constructor() {
     this.axiosInstance = axios.create({
@@ -34,7 +39,33 @@ class ApiService {
 
     this.axiosInstance.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
+      async (error: AxiosError) => {
+        const originalRequest = error.config as RetryableRequestConfig;
+
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+          originalRequest._retry = true;
+
+          if (!this.refreshPromise) {
+            this.refreshPromise = this.refreshToken();
+          }
+
+          try {
+            await this.refreshPromise;
+            this.refreshPromise = null;
+
+            const token = this.getAccessToken();
+            if (token && originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+
+            return this.axiosInstance(originalRequest);
+          } catch (refreshError) {
+            this.refreshPromise = null;
+            this.handleAuthFailure();
+            return Promise.reject(refreshError);
+          }
+        }
+
         return Promise.reject(this.handleApiError(error));
       }
     );
@@ -54,6 +85,47 @@ class ApiService {
       message: error.message || 'An unexpected error occurred',
       statusCode: error.response?.status || 500,
     };
+  }
+
+  private async refreshToken(): Promise<void> {
+    try {
+      // Cookie-based refresh - no need to send refresh token in body
+      const response = await this.axiosInstance.post('/api/auth/refresh-token', {});
+      const refreshData = response.data;
+      
+      if (refreshData.accessToken) {
+        localStorage.setItem('auth_access_token', refreshData.accessToken);
+        
+        if (refreshData.accessTokenExpiresAt) {
+          localStorage.setItem('auth_access_token_expires_at', refreshData.accessTokenExpiresAt);
+        }
+        
+        if (refreshData.refreshTokenExpiresAt) {
+          localStorage.setItem('auth_refresh_token_expires_at', refreshData.refreshTokenExpiresAt);
+        }
+        
+        // ✅ UPDATE: Store session type from server response
+        if (refreshData.isRememberMe !== undefined) {
+          localStorage.setItem('auth_is_remember_me', refreshData.isRememberMe.toString());
+        }
+      } else {
+        throw new Error('No access token in refresh response');
+      }
+    } catch (error) {
+      this.handleAuthFailure();
+      throw error;
+    }
+  }
+
+  private handleAuthFailure(): void {
+    // Clear only localStorage data - cookies will be cleared by server
+    localStorage.removeItem('auth_access_token');
+    localStorage.removeItem('auth_access_token_expires_at');
+    localStorage.removeItem('auth_refresh_token_expires_at');
+    localStorage.removeItem('auth_is_remember_me');
+    localStorage.removeItem('auth_user_info');
+    
+    window.dispatchEvent(new CustomEvent('auth:logout'));
   }
 
   public get<T>(url: string) {

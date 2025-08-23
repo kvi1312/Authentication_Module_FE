@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   Layout,
   Card,
@@ -7,16 +6,13 @@ import {
   Col,
   Typography,
   Avatar,
-  Button,
   Space,
   Tag,
   Timeline,
-  Descriptions,
-  message
+  Descriptions
 } from 'antd';
 import {
   UserOutlined,
-  LogoutOutlined,
   ClockCircleOutlined,
   CheckOutlined,
   CrownOutlined,
@@ -28,13 +24,13 @@ import type { UserInfo } from '../types/auth.types';
 import MainLayout from '../components/layout/Layout';
 import TokenCountdown from '../components/common/TokenCountdown';
 import TokenConfigPanel from '../components/admin/TokenConfigPanel';
+import SessionInfo from '../components/common/SessionInfo';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
 
 const Dashboard: React.FC = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
 
   const getUserTypeColor = (roles: string[]) => {
     if (roles?.includes('SuperAdmin') || roles?.includes('Admin')) return '#722ed1';
@@ -60,16 +56,6 @@ const Dashboard: React.FC = () => {
     return user?.roles?.includes('SuperAdmin') || user?.roles?.includes('Admin');
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      message.success('Logged out successfully');
-      navigate('/login');
-    } catch (error) {
-      message.error('Logout failed');
-    }
-  };
-
   const formatDate = (dateString: string | Date | undefined) => {
     if (!dateString) return 'Never';
     const date = new Date(dateString);
@@ -80,6 +66,9 @@ const Dashboard: React.FC = () => {
     <MainLayout>
       <Content style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          
+          {/* Session Information */}
+          <SessionInfo />
           
           {/* Token Status Section */}
           <TokenCountdown />

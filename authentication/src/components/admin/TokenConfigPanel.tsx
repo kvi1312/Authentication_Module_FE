@@ -169,7 +169,7 @@ const TokenConfigPanel: React.FC = () => {
     try {
       setLoading(true);
       // API call to get current config
-      const response = await tokenConfigService.getCurrentConfig();
+      const response = await tokenConfigService.getTokenConfig();
       setCurrentConfig(response);
       
       // Update form with current config
@@ -211,7 +211,7 @@ const TokenConfigPanel: React.FC = () => {
     try {
       setLoading(true);
       
-      const response = await tokenConfigService.updateConfig({
+      const response = await tokenConfigService.updateTokenConfig({
         accessTokenExpiryMinutes: values.accessTokenExpiryMinutes,
         refreshTokenExpiryDays: values.refreshTokenExpiryDays,
         rememberMeTokenExpiryDays: values.rememberMeTokenExpiryDays

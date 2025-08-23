@@ -49,7 +49,11 @@ const Navigation: React.FC = () => {
     {
       key: 'profile',
       icon: <UserOutlined />,
-      label: 'Profile'
+      label: (
+        <Link to="/profile" style={{ textDecoration: 'none', color: 'inherit' }}>
+          Profile
+        </Link>
+      )
     },
     {
       key: 'logout',
