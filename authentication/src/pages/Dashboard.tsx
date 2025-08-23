@@ -4,29 +4,22 @@ import {
   Card,
   Row,
   Col,
-  Typography,
-  Avatar,
   Space,
-  Descriptions,
   Tabs,
   Statistic,
-  Badge
+  Tag
 } from 'antd';
 import {
-  UserOutlined,
   DashboardOutlined,
   SettingOutlined,
   TeamOutlined,
-  CrownOutlined,
-  StarOutlined,
   CheckCircleOutlined,
   LoginOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
-import { USER_TYPE_LABELS } from '../utils/constants';
 import type { UserInfo } from '../types/auth.types';
 import { Role } from '../types/auth.types';
-import { getStringFromEnum } from '../utils/roleUtils';
+import { getStringFromEnum, getRoleLevel } from '../utils/roleUtils';
 import MainLayout from '../components/layout/Layout';
 import TokenCountdown from '../components/common/TokenCountdown';
 import TokenConfigPanel from '../components/admin/TokenConfigPanel';
@@ -35,35 +28,36 @@ const { Content } = Layout;
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
-  const getUserTypeColor = (roles: Role[]) => {
-    if (roles?.includes(Role.SuperAdmin) || roles?.includes(Role.Admin)) return '#722ed1';
-    if (roles?.includes(Role.Partner)) return '#13c2c2';
-    return '#1890ff';
-  };
-  const getUserTypeIcon = (roles: Role[]) => {
-    if (roles?.includes(Role.SuperAdmin) || roles?.includes(Role.Admin)) return <CrownOutlined />;
-    if (roles?.includes(Role.Partner)) return <StarOutlined />;
-    return <UserOutlined />;
-  };
-  const getUserDisplayRole = (user: UserInfo | null) => {
-    if (!user || !user.roles || user.roles.length === 0) {
-      return USER_TYPE_LABELS[user?.userType as keyof typeof USER_TYPE_LABELS] || 'User';
+
+  const getRoleColor = (role: Role): string => {
+    switch (role) {
+      case Role.SuperAdmin: return 'purple';
+      case Role.Admin: return 'red';
+      case Role.Manager: return 'green';
+      case Role.Employee: return 'blue';
+      case Role.Partner: return 'orange';
+      case Role.Customer: return 'cyan';
+      case Role.Guest: return 'default';
+      default: return 'default';
     }
-    const rolePriority = [Role.SuperAdmin, Role.Admin, Role.Manager, Role.Employee, Role.Partner, Role.Customer, Role.Guest];
-    for (const priority of rolePriority) {
-      if (user.roles.includes(priority)) {
-        return getStringFromEnum(priority);
-      }
-    }
-    return getStringFromEnum(user.roles[0]);
+  };
+
+  const renderRoles = (roles: Role[]) => {
+    if (!roles || roles.length === 0) return <Tag color="default">No Roles</Tag>;
+    
+    const sortedRoles = roles.sort((a, b) => getRoleLevel(b) - getRoleLevel(a));
+    return (
+      <Space size={[0, 4]} wrap>
+        {sortedRoles.map(role => (
+          <Tag key={role} color={getRoleColor(role)}>
+            {getStringFromEnum(role)}
+          </Tag>
+        ))}
+      </Space>
+    );
   };
   const isAdmin = (user: UserInfo | null) => {
     return user?.roles?.includes(Role.SuperAdmin) || user?.roles?.includes(Role.Admin);
-  };
-  const formatDate = (dateString: string | Date | undefined) => {
-    if (!dateString) return 'Never';
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   };
     const OverviewContent = () => (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -81,12 +75,12 @@ const Dashboard: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} lg={8}>
           <Card size="small">
-            <Statistic
-              title="User Role"
-              value={getUserDisplayRole(user)}
-              prefix={getUserTypeIcon(user?.roles || [])}
-              valueStyle={{ color: getUserTypeColor(user?.roles || []) }}
-            />
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: '14px', color: '#8c8c8c' }}>User Roles</span>
+              </div>
+              <div>{renderRoles(user?.roles || [])}</div>
+            </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={8}>
@@ -100,44 +94,6 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
       </Row>
-      <Card title="Profile Information" size="small">
-        <Row gutter={[24, 16]}>
-          <Col xs={24} md={8}>
-            <div style={{ textAlign: 'center' }}>
-              <Badge 
-                count={getUserDisplayRole(user)} 
-                style={{ backgroundColor: getUserTypeColor(user?.roles || []) }}
-              >
-                <Avatar 
-                  size={80} 
-                  icon={<UserOutlined />}
-                  style={{ marginBottom: '8px' }}
-                />
-              </Badge>
-              <div>
-                <Typography.Title level={4} style={{ margin: '8px 0 4px' }}>
-                  {user?.fullName}
-                </Typography.Title>
-                <Typography.Text type="secondary">{user?.email}</Typography.Text>
-              </div>
-            </div>
-          </Col>
-          <Col xs={24} md={16}>
-            <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered>
-              <Descriptions.Item label="Username">{user?.username}</Descriptions.Item>
-              <Descriptions.Item label="Email">{user?.email}</Descriptions.Item>
-              <Descriptions.Item label="First Name">{user?.firstName}</Descriptions.Item>
-              <Descriptions.Item label="Last Name">{user?.lastName}</Descriptions.Item>
-              <Descriptions.Item label="User Type">
-                {USER_TYPE_LABELS[user?.userType as keyof typeof USER_TYPE_LABELS] || 'Unknown'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Created">
-                {formatDate(user?.createdDate)}
-              </Descriptions.Item>
-            </Descriptions>
-          </Col>
-        </Row>
-      </Card>
     </Space>
   );
   const AdminContent = () => (

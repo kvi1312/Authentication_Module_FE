@@ -79,6 +79,10 @@ const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
           message.success(data.message);
           onRoleUpdate(data.user);
           setSelectedRolesToAdd([]);
+          // Close modal after successful update
+          setTimeout(() => {
+            onCancel();
+          }, 1500);
         } else {
           message.error(data.message);
         }
@@ -116,6 +120,10 @@ const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
           message.success(data.message);
           onRoleUpdate(data.user);
           setSelectedRolesToRemove([]);
+          // Close modal after successful update
+          setTimeout(() => {
+            onCancel();
+          }, 1500);
         } else {
           message.error(data.message);
         }

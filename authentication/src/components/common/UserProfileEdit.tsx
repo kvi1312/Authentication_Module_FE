@@ -10,7 +10,8 @@ import {
   Divider,
   Avatar,
   Row,
-  Col
+  Col,
+  Tag
 } from 'antd';
 import { 
   UserOutlined, 
@@ -20,6 +21,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '../../hooks/useAuth';
 import { userService } from '../../services/userService';
+import { getStringFromEnum, getRoleLevel } from '../../utils/roleUtils';
 import type { Role } from '../../types/auth.types';
 const { Title, Text } = Typography;
 interface UpdateProfileRequest {
@@ -32,6 +34,34 @@ const UserProfileEdit: React.FC = () => {
   const [form] = Form.useForm();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const getRoleColor = (role: Role): string => {
+    switch (role) {
+      case 4: return 'purple'; // SuperAdmin
+      case 2: return 'red';    // Admin
+      case 3: return 'green';  // Manager
+      case 5: return 'blue';   // Employee
+      case 6: return 'orange'; // Partner
+      case 1: return 'cyan';   // Customer
+      case 7: return 'default'; // Guest
+      default: return 'default';
+    }
+  };
+
+  const renderRoles = (roles: Role[]) => {
+    if (!roles || roles.length === 0) return <Tag color="default">No Roles</Tag>;
+    
+    const sortedRoles = roles.sort((a, b) => getRoleLevel(b) - getRoleLevel(a));
+    return (
+      <Space size={[0, 4]} wrap>
+        {sortedRoles.map(role => (
+          <Tag key={role} color={getRoleColor(role)}>
+            {getStringFromEnum(role)}
+          </Tag>
+        ))}
+      </Space>
+    );
+  };
   const handleEdit = () => {
     if (user) {
       form.setFieldsValue({
@@ -205,6 +235,12 @@ const UserProfileEdit: React.FC = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Text strong>Full Name:</Text>
                     <Text>{user.fullName}</Text>
+                  </div>
+                </Col>
+                <Col span={24}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text strong>Roles:</Text>
+                    <div>{renderRoles(user.roles || [])}</div>
                   </div>
                 </Col>
                 <Col span={24}>

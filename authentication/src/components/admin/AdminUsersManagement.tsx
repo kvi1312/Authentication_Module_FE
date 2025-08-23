@@ -42,6 +42,7 @@ const AdminUsersManagement: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<UserInfo | null>(null);
   const [userModalVisible, setUserModalVisible] = useState(false);
   const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // Force re-render trigger
   const [params, setParams] = useState<UserTableParams>({
     pageNumber: 1,
     pageSize: 10,
@@ -303,6 +304,7 @@ const AdminUsersManagement: React.FC = () => {
       </Row>
       {}
       <Table
+        key={`user-table-${refreshTrigger}`}
         columns={columns}
         dataSource={users}
         loading={loading}
@@ -336,9 +338,17 @@ const AdminUsersManagement: React.FC = () => {
         visible={roleModalVisible}
         onCancel={() => setRoleModalVisible(false)}
         user={selectedUser}
-        onRoleUpdate={(updatedUser) => {
+        onRoleUpdate={async (updatedUser) => {
+          // Update local state immediately for UI responsiveness
           setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
           setSelectedUser(updatedUser);
+          
+          // Force table re-render
+          setRefreshTrigger(prev => prev + 1);
+          
+          // Reload users from server to ensure data consistency
+          await loadUsers();
+          
           message.success('User roles updated successfully');
         }}
       />
