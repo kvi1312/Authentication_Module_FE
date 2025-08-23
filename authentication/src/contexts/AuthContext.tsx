@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useReducer, useEffect } from 'react';
 import { authService } from '../services/authService';
+import { tokenService } from '../services/tokenService';
 import type {
   AuthState,
   AuthContextType,
@@ -7,8 +8,8 @@ import type {
   RegisterRequest,
   UserInfo
 } from '../types/auth.types';
-
-// Initial state
+import { Role } from '../types/auth.types';
+import { getEnumFromString } from '../utils/roleUtils';
 const initialState: AuthState = {
   isAuthenticated: false,
   user: null,
@@ -17,8 +18,6 @@ const initialState: AuthState = {
   accessToken: null,
   tokenExpiresAt: null,
 };
-
-// Action types
 type AuthAction =
   | { type: 'AUTH_START' }
   | { type: 'AUTH_SUCCESS'; payload: { user: UserInfo; accessToken: string; expiresAt?: Date } }
@@ -26,13 +25,10 @@ type AuthAction =
   | { type: 'AUTH_LOGOUT' }
   | { type: 'CLEAR_ERROR' }
   | { type: 'SET_LOADING'; payload: boolean };
-
-// Reducer
 const authReducer = (state: AuthState, action: AuthAction): AuthState => {
   switch (action.type) {
     case 'AUTH_START':
       return { ...state, loading: true, error: null };
-
     case 'AUTH_SUCCESS':
       return {
         ...state,
@@ -43,7 +39,6 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         loading: false,
         error: null,
       };
-
     case 'AUTH_FAILURE':
       return {
         ...state,
@@ -54,237 +49,243 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         loading: false,
         error: action.payload,
       };
-
     case 'AUTH_LOGOUT':
       return {
-        ...state,
-        isAuthenticated: false,
-        user: null,
-        accessToken: null,
-        tokenExpiresAt: null,
+        ...initialState,
         loading: false,
-        error: null,
       };
-
     case 'CLEAR_ERROR':
       return { ...state, error: null };
-
     case 'SET_LOADING':
       return { ...state, loading: action.payload };
-
     default:
       return state;
   }
 };
-
-// Create context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Provider component
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export { AuthContext };
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
-
-  // Initialize auth state on mount
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        if (authService.isAuthenticated()) {
+  const initializeAuth = async () => {
+    try {
+      const token = tokenService.getAccessToken();
+      if (token) {
+        const isSessionValid = await authService.validateSession();
+        if (isSessionValid) {
           const user = authService.getCurrentUser();
-          const accessToken = authService.getCurrentUser();
-          
-          if (user && accessToken) {
+          if (user) {
+            const updatedToken = tokenService.getAccessToken(); // Get potentially refreshed token
             dispatch({
               type: 'AUTH_SUCCESS',
               payload: {
                 user,
-                accessToken: accessToken.toString(), // Convert to string if needed
+                accessToken: updatedToken || token,
               },
             });
           } else {
+            tokenService.clearTokens();
             dispatch({ type: 'AUTH_LOGOUT' });
           }
         } else {
-          dispatch({ type: 'SET_LOADING', payload: false });
+          dispatch({ type: 'AUTH_LOGOUT' });
         }
-
-        // Initialize auth service
-        authService.initializeAuth();
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-        dispatch({ type: 'SET_LOADING', payload: false });
+      } else {
+        const userInfo = authService.getCurrentUser();
+        if (userInfo) {
+          try {
+            const isSessionValid = await authService.validateSession();
+            if (isSessionValid) {
+              const newToken = tokenService.getAccessToken();
+              dispatch({
+                type: 'AUTH_SUCCESS',
+                payload: {
+                  user: userInfo,
+                  accessToken: newToken || '',
+                },
+              });
+            } else {
+              dispatch({ type: 'AUTH_LOGOUT' });
+            }
+          } catch {
+            dispatch({ type: 'AUTH_LOGOUT' });
+          }
+        } else {
+          dispatch({ type: 'AUTH_LOGOUT' });
+        }
       }
-    };
-
+    } catch {
+      tokenService.clearTokens();
+      dispatch({ type: 'AUTH_LOGOUT' });
+    }
+  };
+  useEffect(() => {
     initializeAuth();
-
-    // Listen for auth events
     const handleAutoLogout = () => {
       dispatch({ type: 'AUTH_LOGOUT' });
     };
-
     window.addEventListener('auth:logout', handleAutoLogout);
-
-    // Cleanup
     return () => {
       window.removeEventListener('auth:logout', handleAutoLogout);
-      authService.cleanup();
     };
   }, []);
-
-  // Login function
   const login = async (credentials: LoginRequest): Promise<void> => {
     dispatch({ type: 'AUTH_START' });
-
     try {
       const response = await authService.login(credentials);
-
-      if (response.success && response.user && response.accessToken) {
-        const expiresAt = response.expiresAt ? new Date(response.expiresAt) : undefined;
-        
+      if (response.success && response.accessToken && response.user) {
+        const userInfo: UserInfo = {
+          ...response.user,
+          lastLoginAt: response.user.lastLoginAt ? new Date(response.user.lastLoginAt) : undefined,
+          createdDate: new Date(response.user.createdDate)
+        };
         dispatch({
           type: 'AUTH_SUCCESS',
           payload: {
-            user: {
-              ...response.user,
-              lastLoginAt: response.user.lastLoginAt ? new Date(response.user.lastLoginAt) : undefined,
-              createdDate: new Date(response.user.createdDate),
-            },
+            user: userInfo,
             accessToken: response.accessToken,
-            expiresAt,
           },
         });
       } else {
         throw new Error(response.message || 'Login failed');
       }
-    } catch (error: any) {
-      const errorMessage = error.message || 'Login failed';
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
       dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
       throw error;
     }
   };
-
-  // Register function
   const register = async (userData: RegisterRequest): Promise<void> => {
     dispatch({ type: 'AUTH_START' });
-
     try {
-      const response = await authService.register(userData);
-
-      if (response.success) {
-        // Registration successful, but user needs to login
-        dispatch({ type: 'SET_LOADING', payload: false });
-      } else {
-        throw new Error(response.message || 'Registration failed');
-      }
-    } catch (error: any) {
-      const errorMessage = error.message || 'Registration failed';
+      await authService.register(userData);
+      dispatch({ type: 'SET_LOADING', payload: false });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
       dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
       throw error;
     }
   };
-
-  // Logout function
   const logout = async (): Promise<void> => {
     try {
       await authService.logout();
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch {
     } finally {
       dispatch({ type: 'AUTH_LOGOUT' });
     }
   };
-
-  // Refresh token function
   const refreshToken = async (): Promise<boolean> => {
     try {
-      const response = await authService.refreshToken();
-      
-      if (response.success && response.accessToken) {
+      const newToken = await authService.refreshToken();
+      if (newToken) {
         const user = authService.getCurrentUser();
-        const expiresAt = response.expiresAt ? new Date(response.expiresAt) : undefined;
-        
         if (user) {
           dispatch({
             type: 'AUTH_SUCCESS',
             payload: {
               user,
-              accessToken: response.accessToken,
-              expiresAt,
+              accessToken: newToken,
             },
           });
           return true;
         }
       }
-      
       return false;
-    } catch (error) {
-      console.error('Token refresh failed:', error);
+    } catch {
       dispatch({ type: 'AUTH_LOGOUT' });
       return false;
     }
   };
-
-  // Clear error function
   const clearError = (): void => {
     dispatch({ type: 'CLEAR_ERROR' });
   };
-
-  // Utility functions
-  const hasRole = (role: string): boolean => {
-    return authService.hasRole(role);
+  const refreshUser = async (): Promise<void> => {
+    if (!state.isAuthenticated) return;
+    try {
+      const userProfile = await authService.fetchCurrentUserFromServer();
+      if (userProfile) {
+        dispatch({
+          type: 'AUTH_SUCCESS',
+          payload: {
+            user: userProfile,
+            accessToken: state.accessToken || '',
+            expiresAt: state.tokenExpiresAt || undefined,
+          },
+        });
+      }
+    } catch (err) {
+      console.error('Error sending logout data:', err);
+    }
   };
-
-  const isAdmin = (): boolean => {
-    return authService.isAdmin();
+  const updateUserData = (userData: UserInfo): void => {
+    if (!state.isAuthenticated) return;
+    localStorage.setItem('auth_user_info', JSON.stringify(userData));
+    dispatch({
+      type: 'AUTH_SUCCESS',
+      payload: {
+        user: userData,
+        accessToken: state.accessToken || '',
+        expiresAt: state.tokenExpiresAt || undefined,
+      },
+    });
   };
-
-  const isPartner = (): boolean => {
-    return authService.isPartner();
+  const hasRole = (role: string | Role): boolean => {
+    if (!state.isAuthenticated || !state.user) return false;
+    let targetRole: Role | null = null;
+    if (typeof role === 'string') {
+      const roleToCheck = role.toLowerCase();
+      if (roleToCheck === 'admin') {
+        return state.user.roles.includes(Role.Admin) || state.user.roles.includes(Role.SuperAdmin);
+      } else if (roleToCheck === 'superadmin') {
+        return state.user.roles.includes(Role.SuperAdmin);
+      } else if (roleToCheck === 'partner') {
+        return state.user.roles.includes(Role.Partner);
+      } else if (roleToCheck === 'customer') {
+        return state.user.roles.includes(Role.Customer);
+      } else if (roleToCheck === 'manager') {
+        return state.user.roles.includes(Role.Manager);
+      } else if (roleToCheck === 'employee') {
+        return state.user.roles.includes(Role.Employee);
+      } else if (roleToCheck === 'guest') {
+        return state.user.roles.includes(Role.Guest);
+      }
+      targetRole = getEnumFromString(roleToCheck);
+    } else {
+      targetRole = role;
+    }
+    if (state.user.roles && state.user.roles.length > 0 && targetRole !== null) {
+      return state.user.roles.includes(targetRole);
+    }
+    if (typeof role === 'string') {
+      const roleToCheck = role.toLowerCase();
+      if (roleToCheck === 'admin') {
+        return state.user.userType === 0;
+      } else if (roleToCheck === 'partner') {
+        return state.user.userType === 1;
+      } else if (roleToCheck === 'user') {
+        return state.user.userType === 2;
+      }
+    }
+    return false;
   };
-
-  const isEndUser = (): boolean => {
-    return authService.isEndUser();
-  };
-
-  const contextValue: AuthContextType = {
-    // State
-    isAuthenticated: state.isAuthenticated,
-    user: state.user,
-    loading: state.loading,
-    error: state.error,
-    accessToken: state.accessToken,
-    tokenExpiresAt: state.tokenExpiresAt,
-
-    // Actions
+  const isAdmin = (): boolean => hasRole('admin');
+  const isPartner = (): boolean => hasRole('partner');
+  const isEndUser = (): boolean => hasRole('user'); // Changed from 'enduser' to 'user'
+  const isRememberMeSession = (): boolean => authService.isRememberMeSession();
+  const value: AuthContextType = {
+    ...state,
     login,
     register,
     logout,
     refreshToken,
+    refreshUser,
+    updateUserData,
     clearError,
-
-    // Utilities
     hasRole,
     isAdmin,
     isPartner,
     isEndUser,
+    isRememberMeSession,
   };
-
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// Custom hook to use auth context
-export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};

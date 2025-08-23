@@ -19,45 +19,38 @@ import {
   ArrowRightOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigationProtection } from '../../hooks/useNavigationProtection';
 import toast from 'react-hot-toast';
-
 const { Title, Text, Paragraph } = Typography;
-
 interface LoginFormData {
   username: string;
   password: string;
   rememberMe: boolean;
-  // userType removed - auto-detected by backend!
 }
-
 const LoginForm: React.FC = () => {
   const [form] = Form.useForm();
   const { login, loading, error, clearError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Get the intended destination from location state
+  useNavigationProtection();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
-
   const onFinish = async (values: LoginFormData) => {
     try {
       clearError();
-
       await login({
         username: values.username,
         password: values.password,
         rememberMe: values.rememberMe,
         deviceInfo: navigator.userAgent,
       });
-
       toast.success('Login successful!');
       navigate(from, { replace: true });
+      window.history.replaceState(null, '', from);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       toast.error(errorMessage);
     }
   };
-
   return (
     <div className="auth-container">
       <Card 
@@ -89,10 +82,9 @@ const LoginForm: React.FC = () => {
             Welcome back
           </Title>
           <Paragraph className="auth-subtitle" style={{ textAlign: 'center', color: '#666' }}>
-            Sign in with your email and password. We'll automatically detect your account type.
+            Sign in with user name and password. We'll automatically detect your account type.
           </Paragraph>
         </div>
-
         <Form
           form={form}
           name="login"
@@ -103,7 +95,7 @@ const LoginForm: React.FC = () => {
           }}
           className="auth-form"
         >
-          {/* Username */}
+          {}
           <Form.Item
             label="Username"
             name="username"
@@ -119,8 +111,7 @@ const LoginForm: React.FC = () => {
               style={{ borderRadius: '8px' }}
             />
           </Form.Item>
-
-          {/* Password */}
+          {}
           <Form.Item
             label="Password"
             name="password"
@@ -136,8 +127,7 @@ const LoginForm: React.FC = () => {
               iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
             />
           </Form.Item>
-
-          {/* Remember Me & Forgot Password */}
+          {}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
             <Form.Item name="rememberMe" valuePropName="checked" style={{ margin: 0 }}>
               <Checkbox>Remember me</Checkbox>
@@ -148,8 +138,7 @@ const LoginForm: React.FC = () => {
               </Button>
             </Link>
           </div>
-
-          {/* Error Message */}
+          {}
           {error && (
             <Form.Item>
               <Alert
@@ -160,8 +149,7 @@ const LoginForm: React.FC = () => {
               />
             </Form.Item>
           )}
-
-          {/* Submit Button */}
+          {}
           <Form.Item>
             <Button
               type="primary"
@@ -181,13 +169,11 @@ const LoginForm: React.FC = () => {
               {loading ? 'Signing in...' : 'Sign in'}
             </Button>
           </Form.Item>
-
-          {/* Divider */}
+          {}
           <Divider>
             <Text type="secondary" style={{ fontSize: '14px' }}>New to AuthModule?</Text>
           </Divider>
-
-          {/* Register Link */}
+          {}
           <div style={{ textAlign: 'center' }}>
             <Link to="/register">
               <Button 
@@ -204,8 +190,7 @@ const LoginForm: React.FC = () => {
             </Link>
           </div>
         </Form>
-
-        {/* Security Notice */}
+        {}
         <div style={{ textAlign: 'center', marginTop: '20px' }}>
           <Text type="secondary" style={{ fontSize: '12px' }}>
             🔒 Protected by advanced security measures including JWT tokens and role-based access control
@@ -215,5 +200,5 @@ const LoginForm: React.FC = () => {
     </div>
   );
 };
-
 export default LoginForm;
+

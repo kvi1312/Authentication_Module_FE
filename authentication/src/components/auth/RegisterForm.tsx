@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Form, 
@@ -10,7 +10,8 @@ import {
   Row,
   Col,
   Divider,
-  Steps
+  Steps,
+  Progress
 } from 'antd';
 import {
   UserOutlined,
@@ -23,6 +24,7 @@ import {
   UserAddOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigationProtection } from '../../hooks/useNavigationProtection';
 import toast from 'react-hot-toast';
 
 const { Title, Text, Paragraph } = Typography;
@@ -38,8 +40,54 @@ interface RegisterFormData {
 
 const RegisterForm: React.FC = () => {
   const [form] = Form.useForm();
+  const [passwordStrength, setPasswordStrength] = useState({ score: 0, message: '', isValid: false });
   const { register: registerUser, loading, error, clearError } = useAuth();
   const navigate = useNavigate();
+
+  // Enable navigation protection
+  useNavigationProtection();
+
+  const validatePasswordStrength = (password: string) => {
+    let score = 0;
+    let message = '';
+    let isValid = false;
+
+    if (password.length >= 8) score++;
+    if (/[a-z]/.test(password)) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^a-zA-Z0-9]/.test(password)) score++;
+
+    switch (score) {
+      case 0:
+      case 1:
+        message = 'Very Weak';
+        break;
+      case 2:
+        message = 'Weak';
+        break;
+      case 3:
+        message = 'Medium';
+        isValid = true;
+        break;
+      case 4:
+        message = 'Strong';
+        isValid = true;
+        break;
+      case 5:
+        message = 'Very Strong';
+        isValid = true;
+        break;
+    }
+
+    return { score, message, isValid };
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const password = e.target.value;
+    const strength = validatePasswordStrength(password);
+    setPasswordStrength(strength);
+  };
 
   const onFinish = async (values: RegisterFormData) => {
     try {
@@ -55,7 +103,8 @@ const RegisterForm: React.FC = () => {
       });
 
       toast.success('Registration successful! Please check your email to verify your account.');
-      navigate('/login');
+      // Replace history to prevent back navigation to register form
+      navigate('/login', { replace: true });
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Registration failed';
       toast.error(errorMessage);
@@ -204,10 +253,6 @@ const RegisterForm: React.FC = () => {
             rules={[
               { required: true, message: 'Please input your password!' },
               { min: 8, message: 'Password must be at least 8 characters!' },
-              {
-                pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-                message: 'Password must contain uppercase, lowercase, number, and special character!'
-              },
             ]}
             hasFeedback
           >
@@ -217,8 +262,36 @@ const RegisterForm: React.FC = () => {
               size="large"
               style={{ borderRadius: '8px' }}
               iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
+              onChange={handlePasswordChange}
             />
           </Form.Item>
+
+          {/* Password Strength Indicator */}
+          <div style={{ marginBottom: '16px', marginTop: '-8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <Text style={{ fontSize: '12px', color: '#666' }}>Password Strength</Text>
+              <Text style={{ fontSize: '12px', color: passwordStrength.score >= 4 ? '#52c41a' : '#ff4d4f' }}>
+                {passwordStrength.score}/5
+              </Text>
+            </div>
+            <Progress
+              percent={(passwordStrength.score / 5) * 100}
+              strokeColor={
+                passwordStrength.score >= 4 ? '#52c41a' : 
+                passwordStrength.score >= 3 ? '#faad14' : '#ff4d4f'
+              }
+              showInfo={false}
+              size="small"
+            />
+            <Text style={{ 
+              fontSize: '11px', 
+              color: passwordStrength.score >= 4 ? '#52c41a' : '#ff4d4f',
+              display: 'block',
+              marginTop: '4px'
+            }}>
+              {passwordStrength.message}
+            </Text>
+          </div>
 
           {/* Confirm Password */}
           <Form.Item

@@ -1,25 +1,24 @@
 import axios from 'axios';
-import type { AxiosInstance, AxiosError } from 'axios';
+import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL } from '../utils/constants';
 import type { ApiErrorResponse } from '../types/auth.types';
-
+interface RetryableRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
 class ApiService {
   private axiosInstance: AxiosInstance;
-
+  private refreshPromise: Promise<void> | null = null;
   constructor() {
     this.axiosInstance = axios.create({
       baseURL: API_BASE_URL,
-      withCredentials: true, // Include cookies for refresh tokens
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
       },
     });
-
     this.setupInterceptors();
   }
-
   private setupInterceptors() {
-    // Request interceptor to add auth token
     this.axiosInstance.interceptors.request.use(
       (config) => {
         const token = this.getAccessToken();
@@ -32,100 +31,93 @@ class ApiService {
         return Promise.reject(error);
       }
     );
-
-    // Response interceptor to handle errors and token refresh
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config;
-
-        // Handle 401 Unauthorized
-        if (error.response?.status === 401 && originalRequest) {
-          // Try to refresh token
+        const originalRequest = error.config as RetryableRequestConfig;
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+          originalRequest._retry = true;
+          if (!this.refreshPromise) {
+            this.refreshPromise = this.refreshToken();
+          }
           try {
-            await this.refreshToken();
-            // Retry original request with new token
+            await this.refreshPromise;
+            this.refreshPromise = null;
             const token = this.getAccessToken();
             if (token && originalRequest.headers) {
               originalRequest.headers.Authorization = `Bearer ${token}`;
             }
             return this.axiosInstance(originalRequest);
           } catch (refreshError) {
-            // Refresh failed, redirect to login
+            this.refreshPromise = null;
             this.handleAuthFailure();
             return Promise.reject(refreshError);
           }
         }
-
         return Promise.reject(this.handleApiError(error));
       }
     );
   }
-
   private getAccessToken(): string | null {
-    // This will be implemented by the token service
     return localStorage.getItem('auth_access_token');
   }
-
-  private async refreshToken(): Promise<void> {
-    try {
-      const response = await this.axiosInstance.post('/api/auth/refresh-token');
-      const { accessToken, expiresAt } = response.data;
-      
-      if (accessToken) {
-        localStorage.setItem('auth_access_token', accessToken);
-        if (expiresAt) {
-          localStorage.setItem('auth_token_expires_at', expiresAt);
-        }
-      }
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  private handleAuthFailure(): void {
-    // Clear tokens and redirect to login
-    localStorage.removeItem('auth_access_token');
-    localStorage.removeItem('auth_token_expires_at');
-    localStorage.removeItem('auth_user_info');
-    
-    // Dispatch custom event to notify auth context
-    window.dispatchEvent(new CustomEvent('auth:logout'));
-  }
-
   private handleApiError(error: AxiosError): ApiErrorResponse {
     if (error.response?.data) {
       return error.response.data as ApiErrorResponse;
     }
-
     return {
       success: false,
       message: error.message || 'An unexpected error occurred',
       statusCode: error.response?.status || 500,
     };
   }
-
-  // Public methods for making API calls
+  private async refreshToken(): Promise<void> {
+    try {
+      const response = await this.axiosInstance.post('/api/auth/refresh-token', {});
+      const refreshData = response.data;
+      if (refreshData.accessToken) {
+        localStorage.setItem('auth_access_token', refreshData.accessToken);
+        if (refreshData.accessTokenExpiresAt) {
+          localStorage.setItem('auth_access_token_expires_at', refreshData.accessTokenExpiresAt);
+        }
+        if (refreshData.refreshTokenExpiresAt) {
+          localStorage.setItem('auth_refresh_token_expires_at', refreshData.refreshTokenExpiresAt);
+        }
+        if (refreshData.isRememberMe !== undefined) {
+          localStorage.setItem('auth_is_remember_me', refreshData.isRememberMe.toString());
+        }
+      } else {
+        throw new Error('No access token in refresh response');
+      }
+    } catch (err) {
+      console.error('Error refreshing token:', err);
+      this.handleAuthFailure();
+      throw err;
+    }
+  }
+  private handleAuthFailure(): void {
+    localStorage.removeItem('auth_access_token');
+    localStorage.removeItem('auth_access_token_expires_at');
+    localStorage.removeItem('auth_refresh_token_expires_at');
+    localStorage.removeItem('auth_is_remember_me');
+    localStorage.removeItem('auth_user_info');
+    window.dispatchEvent(new CustomEvent('auth:logout'));
+  }
   public get<T>(url: string) {
     return this.axiosInstance.get<T>(url);
   }
-
-  public post<T>(url: string, data?: any) {
+  public post<T>(url: string, data?: unknown) {
     return this.axiosInstance.post<T>(url, data);
   }
-
-  public put<T>(url: string, data?: any) {
+  public put<T>(url: string, data?: unknown) {
     return this.axiosInstance.put<T>(url, data);
   }
-
   public delete<T>(url: string) {
     return this.axiosInstance.delete<T>(url);
   }
-
-  public patch<T>(url: string, data?: any) {
+  public patch<T>(url: string, data?: unknown) {
     return this.axiosInstance.patch<T>(url, data);
   }
 }
-
-// Export singleton instance
 export const apiService = new ApiService();
+

@@ -1,124 +1,76 @@
-import { STORAGE_KEYS, TOKEN_REFRESH_THRESHOLD } from '../utils/constants';
-
+import type { LoginResponse, RefreshTokenResponse } from '../types/auth.types';
 class TokenService {
-  private refreshTimer: NodeJS.Timeout | null = null;
-
-  // Token storage in memory
+  setTokensFromLoginResponse(response: LoginResponse): void {
+    if (response.accessToken) {
+      localStorage.setItem('auth_access_token', response.accessToken);
+    }
+    if (response.accessTokenExpiresAt) {
+      localStorage.setItem('auth_access_token_expires_at', response.accessTokenExpiresAt);
+    }
+    if (response.refreshTokenExpiresAt) {
+      localStorage.setItem('auth_refresh_token_expires_at', response.refreshTokenExpiresAt);
+    }
+  }
+  setTokensFromRefreshResponse(response: RefreshTokenResponse): void {
+    if (response.accessToken) {
+      localStorage.setItem('auth_access_token', response.accessToken);
+    }
+    if (response.accessTokenExpiresAt) {
+      localStorage.setItem('auth_access_token_expires_at', response.accessTokenExpiresAt);
+    }
+    if (response.refreshTokenExpiresAt) {
+      localStorage.setItem('auth_refresh_token_expires_at', response.refreshTokenExpiresAt);
+    }
+    if (response.isRememberMe !== undefined) {
+      localStorage.setItem('auth_is_remember_me', response.isRememberMe.toString());
+    }
+  }
   getAccessToken(): string | null {
-    return localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    return localStorage.getItem('auth_access_token');
   }
-
-  setAccessToken(token: string, expiresAt: Date): void {
-    localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
-    localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRES_AT, expiresAt.toISOString());
-    
-    // Setup auto refresh
-    this.setupAutoRefresh();
+  getRefreshTokenExpiry(): Date | null {
+    const expiresAt = localStorage.getItem('auth_refresh_token_expires_at');
+    return expiresAt ? new Date(expiresAt) : null;
   }
-
+  getAccessTokenExpiry(): Date | null {
+    const expiresAt = localStorage.getItem('auth_access_token_expires_at');
+    return expiresAt ? new Date(expiresAt) : null;
+  }
+  isRememberMeSession(): boolean {
+    const isRememberMe = localStorage.getItem('auth_is_remember_me');
+    return isRememberMe === 'true';
+  }
   clearTokens(): void {
-    localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-    localStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRES_AT);
-    localStorage.removeItem(STORAGE_KEYS.USER_INFO);
-    
-    // Clear auto refresh
-    this.clearAutoRefresh();
+    localStorage.removeItem('auth_access_token');
+    localStorage.removeItem('auth_access_token_expires_at');
+    localStorage.removeItem('auth_refresh_token_expires_at');
+    localStorage.removeItem('auth_is_remember_me');
+    localStorage.removeItem('auth_user_info');
   }
-
-  // Token validation
-  isTokenExpired(token?: string): boolean {
-    const tokenToCheck = token || this.getAccessToken();
-    if (!tokenToCheck) return true;
-
-    const expiryString = localStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRES_AT);
-    if (!expiryString) return true;
-
-    const expiryTime = new Date(expiryString);
-    return new Date() >= expiryTime;
-  }
-
-  getTokenExpiryTime(token?: string): Date | null {
-    const tokenToCheck = token || this.getAccessToken();
-    if (!tokenToCheck) return null;
-
-    const expiryString = localStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRES_AT);
-    if (!expiryString) return null;
-
-    return new Date(expiryString);
-  }
-
-  shouldRefreshToken(): boolean {
-    const expiryTime = this.getTokenExpiryTime();
-    if (!expiryTime) return false;
-
+  isTokenExpired(): boolean {
+    const expiresAt = localStorage.getItem('auth_access_token_expires_at');
+    if (!expiresAt) return true;
+    const expiryTime = new Date(expiresAt);
     const now = new Date();
-    const timeUntilExpiry = expiryTime.getTime() - now.getTime();
-    
-    // Refresh if token expires within threshold (default 5 minutes)
-    return timeUntilExpiry <= TOKEN_REFRESH_THRESHOLD;
+    return now >= expiryTime;
   }
-
-  // Auto refresh setup
-  setupAutoRefresh(): void {
-    this.clearAutoRefresh();
-
-    const expiryTime = this.getTokenExpiryTime();
-    if (!expiryTime) return;
-
-    const now = new Date();
-    const timeUntilRefresh = expiryTime.getTime() - now.getTime() - TOKEN_REFRESH_THRESHOLD;
-
-    if (timeUntilRefresh > 0) {
-      this.refreshTimer = setTimeout(() => {
-        // Dispatch custom event to trigger refresh
-        window.dispatchEvent(new CustomEvent('auth:refresh-needed'));
-      }, timeUntilRefresh);
-    }
-  }
-
-  clearAutoRefresh(): void {
-    if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-  }
-
-  // JWT token parsing (for debugging/development)
-  parseToken(token: string): any {
+  async isSessionValid(): Promise<boolean> {
     try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      return JSON.parse(jsonPayload);
-    } catch (error) {
-      console.error('Error parsing token:', error);
-      return null;
+      const response = await fetch('/api/auth/refresh-token', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      return response.ok;
+    } catch {
+      return false;
     }
   }
-
-  // Get user roles from token
-  getUserRolesFromToken(token?: string): string[] {
-    const tokenToCheck = token || this.getAccessToken();
-    if (!tokenToCheck) return [];
-
-    const payload = this.parseToken(tokenToCheck);
-    if (!payload) return [];
-
-    // JWT claims for roles can vary, common ones are 'role', 'roles', or custom claim
-    return payload.role || payload.roles || payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || [];
-  }
-
-  // Check if user has specific role
-  hasRole(role: string, token?: string): boolean {
-    const roles = this.getUserRolesFromToken(token);
-    return Array.isArray(roles) ? roles.includes(role) : roles === role;
+  isAuthenticated(): boolean {
+    const token = this.getAccessToken();
+    return !!token && !this.isTokenExpired();
   }
 }
-
-// Export singleton instance
 export const tokenService = new TokenService();
+
