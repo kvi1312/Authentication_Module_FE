@@ -26,6 +26,8 @@ import { useAuth } from '../hooks/useAuth';
 import { USER_TYPE_LABELS } from '../utils/constants';
 import type { UserInfo } from '../types/auth.types';
 import MainLayout from '../components/layout/Layout';
+import TokenCountdown from '../components/common/TokenCountdown';
+import TokenConfigPanel from '../components/admin/TokenConfigPanel';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -54,6 +56,10 @@ const Dashboard: React.FC = () => {
     return USER_TYPE_LABELS[user.userType as keyof typeof USER_TYPE_LABELS] || 'User';
   };
 
+  const isAdmin = (user: UserInfo | null) => {
+    return user?.roles?.includes('SuperAdmin') || user?.roles?.includes('Admin');
+  };
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -74,6 +80,9 @@ const Dashboard: React.FC = () => {
     <MainLayout>
       <Content style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          
+          {/* Token Status Section */}
+          <TokenCountdown />
 
           <Row gutter={[24, 24]}>
             {/* Account Information */}
@@ -187,6 +196,15 @@ const Dashboard: React.FC = () => {
               </Card>
             </Col>
           </Row>
+
+          {/* Admin Token Configuration - Only show for Admin/SuperAdmin */}
+          {isAdmin(user) && (
+            <Row gutter={[24, 24]} style={{ marginTop: '24px' }}>
+              <Col span={24}>
+                <TokenConfigPanel />
+              </Col>
+            </Row>
+          )}
         </div>
       </Content>
     </MainLayout>

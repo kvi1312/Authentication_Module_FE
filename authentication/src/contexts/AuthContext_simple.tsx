@@ -1,4 +1,4 @@
-import React, { createContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { authService } from '../services/authService';
 import { tokenService } from '../services/tokenService';
 import type {
@@ -72,7 +72,13 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export { AuthContext };
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
@@ -115,16 +121,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await authService.login(credentials);
 
       if (response.success && response.accessToken && response.user) {
-        const userInfo: UserInfo = {
-          ...response.user,
-          lastLoginAt: response.user.lastLoginAt ? new Date(response.user.lastLoginAt) : undefined,
-          createdDate: new Date(response.user.createdDate)
-        };
-        
         dispatch({
           type: 'AUTH_SUCCESS',
           payload: {
-            user: userInfo,
+            user: response.user,
             accessToken: response.accessToken,
           },
         });

@@ -7,7 +7,6 @@ import type {
 } from '../types/auth.types';
 
 class AdminService {
-  // Get current token configuration
   async getTokenConfig(): Promise<TokenConfigResponse> {
     try {
       const response = await apiService.get<TokenConfigResponse>(
@@ -19,7 +18,6 @@ class AdminService {
     }
   }
 
-  // Update token configuration
   async updateTokenConfig(config: UpdateTokenConfigRequest): Promise<UpdateTokenConfigResponse> {
     try {
       const response = await apiService.put<UpdateTokenConfigResponse>(

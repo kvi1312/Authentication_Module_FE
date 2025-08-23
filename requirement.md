@@ -1,1252 +1,458 @@
-# 🚀 Authentication API - Auto-Detect UserType Implementation
+# Admin Token Configuration Management
 
-## 📢 **Major Update Announcement:**
+## 🔐 Authorization Requirements
+- **Role Required:** `SuperAdmin` only
+- **Authentication:** Bearer token in Authorization header
 
-Team đã quyết định **IMPLEMENT tính năng Auto-Detect UserType** để cải thiện UX và modernize authentication system. Đây là breakthrough improvement cho user experience!
+## 🆕 **Updated Authentication Response Format**
 
-## 🎯 **Why Auto-Detect?**
-
-1. **Better UX** - Users không cần biết họ thuộc loại nào
-2. **Simplified UI** - Loại bỏ confusing dropdowns
-3. **Modern approach** - Follow industry best practices
-4. **Security improvement** - Prevent self-assignment của admin roles
-5. **Performance** - Strategy pattern vẫn hiệu quả với caching
-
-## 🔄 **New API Endpoints (Auto-Detect Enabled):**
-
-### **Authentication Endpoints:**
-
-#### **1. Login Endpoint (Auto-Detect UserType)**
+### Login & Refresh Token Responses Now Include:
+```json
+{
+  "success": true,
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "550e8400-e29b-41d4-a716-446655440000",
+  
+  // ✅ NEW: Separate expiry times for countdown timers
+  "accessTokenExpiresAt": "2025-08-23T09:30:00Z",      // 30 min from now
+  "refreshTokenExpiresAt": "2025-08-30T08:00:00Z",     // 7 days from now 
+  "rememberMeTokenExpiresAt": "2025-09-22T08:00:00Z",  // 30 days (if remember me)
+  
+  // Legacy field (still supported)
+  "expiresAt": "2025-08-23T09:30:00Z",
+  
+  "user": { "username": "admin", ... }
+}
 ```
+
+### 🎯 **Impact on Frontend Countdown Timers:**
+- **Access Token Timer:** Use `accessTokenExpiresAt` - triggers auto refresh
+- **Session Timer:** Use `refreshTokenExpiresAt` - triggers logout  
+- **Remember Me Timer:** Use `rememberMeTokenExpiresAt` - max session limit
+
+## 📋 API Endpoints
+
+### 1. Get Current Token Configuration
+```http
+GET /api/admin/token-config
+Authorization: Bearer {access_token}
+```
+
+**Response:**
+```json
+{
+  "accessTokenExpiryMinutes": 30,
+  "refreshTokenExpiryDays": 7,
+  "rememberMeTokenExpiryDays": 30,
+  "lastUpdated": "2025-08-23T08:00:00Z",
+  "updatedBy": "admin@authmodule.com",
+  
+  // ✅ NEW: Display format helpers for UI
+  "accessTokenExpiryDisplay": "30 minutes",
+  "refreshTokenExpiryDisplay": "7.0 days", 
+  "rememberMeTokenExpiryDisplay": "30.0 days"
+}
+```
+
+### 💡 **UI Usage for Current Config:**
+```tsx
+interface TokenConfigResponse {
+  accessTokenExpiryMinutes: number;     // For sliders/inputs
+  refreshTokenExpiryDays: number;       // For sliders/inputs  
+  rememberMeTokenExpiryDays: number;    // For sliders/inputs
+  
+  accessTokenExpiryDisplay: string;     // For display text
+  refreshTokenExpiryDisplay: string;    // For display text
+  rememberMeTokenExpiryDisplay: string; // For display text
+}
+```
+
+### 2. Update Token Configuration
+```http
+PUT /api/admin/token-config
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "accessTokenExpiryMinutes": 15,
+  "refreshTokenExpiryDays": 3,
+  "rememberMeTokenExpiryDays": 14
+}
+```
+
+**Validation Rules:**
+- `accessTokenExpiryMinutes`: 1-60 minutes
+- `refreshTokenExpiryDays`: 0.01-7 days (15 minutes to 1 week)
+- `rememberMeTokenExpiryDays`: 0.1-30 days (2.4 hours to 1 month)
+
+**Response:**
+```json
+{
+  "message": "Token configuration updated successfully",
+  "config": {
+    "accessTokenExpiryMinutes": 15,
+    "refreshTokenExpiryDays": 3,
+    "rememberMeTokenExpiryDays": 14,
+    
+    // ✅ NEW: Display helpers
+    "accessTokenExpiryDisplay": "15 minutes",
+    "refreshTokenExpiryDisplay": "3.0 days",
+    "rememberMeTokenExpiryDisplay": "14.0 days"
+  },
+  "warning": "This is a runtime configuration change. Restart the application to use original settings."
+}
+```
+
+### ⚡ **Real-time Impact:**
+- **Existing Users:** Continue with old token expiry times until natural expiry
+- **New Logins:** Immediately use new configuration values
+- **Token Refresh:** New access tokens use updated expiry times
+
+### 3. Reset to Default Configuration
+```http
+POST /api/admin/token-config/reset
+Authorization: Bearer {access_token}
+```
+
+**Response:**
+```json
+{
+  "message": "Token configuration reset to default values",
+  "config": {
+    "accessTokenExpiryMinutes": 30,
+    "refreshTokenExpiryDays": 7,
+    "rememberMeTokenExpiryDays": 30,
+    
+    // ✅ Display helpers included
+    "accessTokenExpiryDisplay": "30 minutes",
+    "refreshTokenExpiryDisplay": "7.0 days",
+    "rememberMeTokenExpiryDisplay": "30.0 days"
+  }
+}
+```
+
+### 4. Apply Preset Configuration
+```http
+POST /api/admin/token-config/preset/{presetName}
+Authorization: Bearer {access_token}
+```
+
+**Available Presets:**
+- `very-short`: Access 2min, Refresh 30min, Remember 2.4hrs
+- `short`: Access 5min, Refresh 6hrs, Remember 1day
+- `medium`: Access 15min, Refresh 1day, Remember 1week
+- `long`: Access 1hr, Refresh 1week, Remember 1month
+
+**Example:**
+```http
+POST /api/admin/token-config/preset/short
+```
+
+**Response:**
+```json
+{
+  "message": "Applied 'short' preset successfully",
+  "preset": "short",
+  "config": {
+    "accessTokenExpiryMinutes": 5,
+    "refreshTokenExpiryDays": 0.25,
+    "rememberMeTokenExpiryDays": 1,
+    
+    // ✅ Display helpers for UI
+    "accessTokenExpiryDisplay": "5 minutes",
+    "refreshTokenExpiryDisplay": "6.0 hours",
+    "rememberMeTokenExpiryDisplay": "1.0 days"
+  }
+}
+```
+
+### 5. Get Available Presets
+```http
+GET /api/admin/token-config/presets
+Authorization: Bearer {access_token}
+```
+
+**Response:**
+```json
+{
+  "message": "Available token lifetime presets",
+  "presets": {
+    "very_short": { "access": "2 min", "refresh": "30 min", "remember": "2.4 hours" },
+    "short": { "access": "5 min", "refresh": "6 hours", "remember": "1 day" },
+    "medium": { "access": "15 min", "refresh": "1 day", "remember": "1 week" },
+    "long": { "access": "1 hour", "refresh": "1 week", "remember": "1 month" }
+  },
+  "usage": "POST /api/admin/token-config/preset/{presetName}"
+}
+```
+
+## 🚨 Error Responses
+
+### 401 Unauthorized
+```json
+{
+  "message": "Unauthorized"
+}
+```
+
+### 403 Forbidden (Non-SuperAdmin)
+```json
+{
+  "message": "Access denied. SuperAdmin role required."
+}
+```
+
+### 400 Bad Request (Invalid Values)
+```json
+{
+  "message": "Validation failed",
+  "errors": {
+    "accessTokenExpiryMinutes": "Must be between 1 and 60 minutes",
+    "refreshTokenExpiryDays": "Must be between 0.01 and 7 days"
+  }
+}
+```
+
+### 500 Internal Server Error
+```json
+{
+  "message": "Failed to update token configuration"
+}
+```
+
+## 🎨 UI Component Suggestions
+
+### 1. Token Configuration Form
+```tsx
+interface TokenConfigForm {
+  accessTokenMinutes: number;     // Slider: 1-60 min
+  refreshTokenDays: number;       // Slider: 0.01-7 days
+  rememberMeTokenDays: number;    // Slider: 0.1-30 days
+}
+
+// ✅ NEW: Display current config with countdown timers
+interface TokenConfigDisplay {
+  config: TokenConfigResponse;
+  isLive: boolean; // Show if config is runtime modified
+}
+```
+
+### 2. Real-time Configuration Monitor
+```tsx
+function TokenConfigMonitor() {
+  return (
+    <div className="config-monitor">
+      <div className="current-settings">
+        <h3>Current Token Lifetimes</h3>
+        <div className="token-info">
+          <span>Access Token: {config.accessTokenExpiryDisplay}</span>
+          <span>Refresh Token: {config.refreshTokenExpiryDisplay}</span>
+          <span>Remember Me: {config.rememberMeTokenExpiryDisplay}</span>
+        </div>
+      </div>
+      
+      {/* ✅ NEW: Show impact on active users */}
+      <div className="impact-warning">
+        <h4>Impact on Users:</h4>
+        <ul>
+          <li>Existing tokens: Continue until natural expiry</li>
+          <li>New logins: Use updated configuration immediately</li>
+          <li>Token refresh: Apply new settings</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+```
+
+### 3. Quick Preset Buttons with Live Preview
+- Four preset buttons: Very Short, Short, Medium, Long
+- Show current values next to each preset
+- **✅ NEW:** Preview countdown timers for each preset
+
+### 4. Current Configuration Display
+- Show current settings in a card format
+- Display last updated time and admin who made changes
+- **✅ NEW:** Show runtime vs default configuration status
+
+### 5. Warning Banner
+- Show warning when configuration is modified at runtime
+- Suggest application restart for permanent changes
+- **✅ NEW:** Display countdown for when changes take effect
+
+## 📱 Frontend Implementation Notes
+
+### 1. **Authentication Check:** Verify user has `SuperAdmin` role before showing this UI
+
+### 2. **Real-time Updates:** Refresh configuration after any changes
+
+### 3. **Validation:** Client-side validation matching server rules
+
+### 4. **Confirmation Dialogs:** Show confirmation for reset and preset applications
+
+### 5. **Activity Logging:** Display who made changes and when
+
+### 6. **✅ NEW: Token Countdown Integration**
+```tsx
+// Monitor current user's token expiry in real-time
+function AdminTokenMonitor({ userTokens }: { userTokens: LoginResponse }) {
+  return (
+    <div className="admin-token-monitor">
+      <h4>Your Current Session:</h4>
+      <div className="token-timers">
+        <div className="timer-item">
+          <span>Access Token:</span>
+          <Countdown 
+            target={userTokens.accessTokenExpiresAt}
+            format="mm:ss"
+            onComplete={() => handleTokenRefresh()}
+          />
+        </div>
+        <div className="timer-item">
+          <span>Session:</span>
+          <Countdown 
+            target={userTokens.refreshTokenExpiresAt}
+            format="d[d] h[h] mm[m]"
+            onComplete={() => handleLogout()}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### 7. **✅ NEW: Configuration Impact Visualization**
+```tsx
+// Show how config changes affect different user scenarios
+function ConfigImpactPreview({ newConfig }: { newConfig: TokenConfigForm }) {
+  const scenarios = [
+    {
+      user: "New Login User",
+      accessExpiry: calculateExpiry(newConfig.accessTokenMinutes, 'minutes'),
+      refreshExpiry: calculateExpiry(newConfig.refreshTokenDays, 'days'),
+      impact: "immediate"
+    },
+    {
+      user: "Existing Active User", 
+      accessExpiry: "No change until natural expiry",
+      refreshExpiry: "No change until refresh",
+      impact: "delayed"
+    }
+  ];
+  
+  return (
+    <div className="impact-preview">
+      <h4>Configuration Impact Preview:</h4>
+      {scenarios.map(scenario => (
+        <div key={scenario.user} className="scenario">
+          <h5>{scenario.user}</h5>
+          <p>Access Token: {scenario.accessExpiry}</p>
+          <p>Refresh Token: {scenario.refreshExpiry}</p>
+          <span className={`impact-${scenario.impact}`}>
+            {scenario.impact === 'immediate' ? '⚡ Immediate' : '⏱️ Delayed'}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## ⚡ Configuration Change Impact
+
+### Immediate Effects
+- **Existing Tokens:** Continue working until natural expiry (unchanged)
+- **New Tokens:** Immediately use new configuration values
+- **Refresh Operations:** Generate new tokens with updated settings
+
+### User Impact Scenarios
+
+**Scenario 1: Admin reduces token lifetime (1 day → 1 minute)**
+```
+Timeline:
+09:00 - Current setting: 1 day expiry
+09:30 - User A logs in → Token valid until 09:30 tomorrow
+10:00 - Admin changes to 1 minute expiry  
+10:30 - User B logs in → Token valid until 10:31 (1 minute later)
+11:00 - User A still active (old token not affected)
+11:00 - User A logout/login → New token valid until 11:01 (1 minute)
+```
+
+**Scenario 2: Token refresh with new settings**
+- When any user refreshes their token, new access token uses current config
+- Old refresh tokens remain valid until natural expiry
+- New refresh tokens created with updated lifetime
+
+### Recommendations
+1. **Gradual Changes:** Avoid drastic reductions during peak hours
+2. **User Notification:** Inform users about shorter session times
+3. **Monitoring:** Track active sessions before making changes
+4. **Rollback Plan:** Keep reset endpoint ready for emergencies
+
+## 🔧 Testing Credentials & API Usage
+
+### Login as SuperAdmin to access these APIs:
+- **Username:** `admin`
+- **Password:** `Admin@123`
+- **Role:** `SuperAdmin`
+
+### 📋 **Complete API Flow Example:**
+
+#### 1. Login to get access token with countdown data:
+```bash
 POST /api/auth/login
-```
+{
+  "username": "admin",
+  "password": "Admin@123",
+  "rememberMe": true
+}
 
-**❌ OLD (Confusing):**
-```
-POST /api/auth/login/0  # Admin
-POST /api/auth/login/1  # Partner  
-POST /api/auth/login/2  # EndUser
-```
-
-**✅ NEW (Simple):**
-```
-POST /api/auth/login    # Auto-detect user type
-```
-
-**Request Body (Simplified):**
-```typescript
-interface LoginRequest {
-  username: string;          // Required - email or username
-  password: string;          // Required - user password  
-  rememberMe: boolean;       // Optional - extends token life
-  // UserType REMOVED - auto-detected by backend!
+# Response includes countdown timer data:
+{
+  "success": true,
+  "accessToken": "eyJ...",
+  "accessTokenExpiresAt": "2025-08-23T09:30:00Z",    # ← For countdown
+  "refreshTokenExpiresAt": "2025-08-30T08:00:00Z",   # ← For countdown
+  "rememberMeTokenExpiresAt": "2025-09-22T08:00:00Z" # ← For countdown
 }
 ```
 
-**Success Response (200):**
-```typescript
-interface LoginResponse {
-  success: boolean;          // Always true for 200
-  message: string;           // "Login successful"
-  accessToken: string;       // JWT access token
-  refreshToken?: string;     // May be null if HTTP-only cookies
-  expiresAt: string;         // ISO date string
-  sessionId?: string;        // Session identifier
-  user: {
-    id: string;              // User UUID
-    username: string;        // Username
-    email: string;           // Email address
-    firstName: string;       // First name
-    lastName: string;        // Last name
-    fullName: string;        // "firstName lastName"
-    isActive: boolean;       // Account status
-    lastLoginAt?: string;    // ISO date string
-    createdDate: string;     // ISO date string
-    roles: string[];         // User roles array
-    userType: UserType;      // ✅ DETECTED by backend (0=Admin, 1=Partner, 2=EndUser)
-  };
-}
-```
-
-**Error Response (400/401):**
-```typescript
-interface ApiErrorResponse {
-  success: false;
-  message: string;           // "Invalid credentials" (no user type mismatch)
-  errors?: {                 // Validation errors (optional)
-    [field: string]: string[];
-  };
-}
-```
-
-#### **2. Register Endpoint (EndUser Only for Public)**
-```
-POST /api/auth/register
-```
-
-**Request Body (Simplified & Secure):**
-```typescript
-interface RegisterRequest {
-  username: string;          // Required - unique username
-  email: string;            // Required - valid email
-  password: string;         // Required - min 8 chars
-  confirmPassword: string;  // Required - must match password
-  firstName: string;        // Required
-  lastName: string;         // Required
-  // UserType REMOVED - always creates EndUser for security!
-  // Admin/Partner accounts must be created by Admin via separate endpoint
-}
-```
-
-**Success Response (201):**
-```typescript
-interface RegisterResponse {
-  success: boolean;          // Always true for 201
-  message: string;           // "Registration successful. You can now login."
-  user: {
-    id: string;              // New user UUID
-    username: string;        // Username
-    email: string;           // Email
-    firstName: string;       // First name
-    lastName: string;        // Last name
-    fullName: string;        // Full name
-    userType: UserType;      // Always EndUser (2) for public registration
-    isActive: boolean;       // Account status
-    createdDate: string;     // ISO date string
-    roles: string[];         // ["EndUser"] - default role
-  };
-}
-```
-
-#### **3. Other Endpoints (Unchanged)**
-```
-POST /api/auth/logout               # Logout user
-POST /api/auth/refresh-token        # Refresh access token
-GET  /api/admin/token-config        # Get token configuration
-PUT  /api/admin/token-config        # Update token configuration
-```
-
-## 🎨 **Frontend Implementation (Simplified):**
-
-### **1. Login Form (NO Dropdown Needed!)**
-
-```typescript
-// Login Component - Much cleaner!
-const LoginForm = () => {
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    rememberMe: false
-    // No userType needed! 🎉
-  });
-
-  const handleLogin = async (e: FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      // Simple API call - no userType parameter!
-      const response = await authService.login({
-        username: formData.username,
-        password: formData.password,
-        rememberMe: formData.rememberMe
-      });
-      
-      // Backend tells us what user type they are
-      console.log('Logged in as:', response.data.user.userType);
-      console.log('User roles:', response.data.user.roles);
-      
-      // Handle success based on detected user type
-      redirectBasedOnUserType(response.data.user.userType);
-      
-    } catch (error) {
-      console.error('Login failed:', error.response?.data);
-    }
-  };
-
-  const redirectBasedOnUserType = (userType: UserType) => {
-    switch (userType) {
-      case UserType.Admin:
-        router.push('/admin/dashboard');
-        break;
-      case UserType.Partner:
-        router.push('/partner/dashboard');
-        break;
-      case UserType.EndUser:
-        router.push('/dashboard');
-        break;
-    }
-  };
-
-  return (
-    <form onSubmit={handleLogin}>
-      {/* ✅ Clean, simple form - no confusing dropdown! */}
-      
-      <div>
-        <input
-          type="text"
-          placeholder="Email or Username"
-          value={formData.username}
-          onChange={(e) => setFormData({...formData, username: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="password"
-          placeholder="Password"
-          value={formData.password}
-          onChange={(e) => setFormData({...formData, password: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <label>
-          <input
-            type="checkbox"
-            checked={formData.rememberMe}
-            onChange={(e) => setFormData({...formData, rememberMe: e.target.checked})}
-          />
-          Remember Me
-        </label>
-      </div>
-      
-      <button type="submit">Sign In</button>
-      
-      {/* Clear messaging for different user types */}
-      <div className="help-text">
-        <p>Don't have an account? <Link to="/register">Sign up</Link></p>
-        <p>Admin or Partner? Use your organization credentials above.</p>
-      </div>
-    </form>
-  );
-};
-```
-
-### **2. Register Form (EndUser Only - Secure)**
-
-```typescript
-// Register Component - Public registration for EndUsers only
-const RegisterForm = () => {
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: ''
-    // No userType - always EndUser for security!
-  });
-
-  const handleRegister = async (e: FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const response = await authService.register(formData);
-      console.log('Registration successful:', response.data);
-      
-      // Show success message and redirect to login
-      showSuccessMessage('Registration successful! Please login with your credentials.');
-      router.push('/login');
-      
-    } catch (error) {
-      console.error('Registration failed:', error.response?.data);
-    }
-  };
-
-  return (
-    <form onSubmit={handleRegister}>
-      <h2>Create Your Account</h2>
-      <p>Sign up as an End User. Admin and Partner accounts are created by administrators.</p>
-      
-      <div>
-        <input
-          type="text"
-          placeholder="Username"
-          value={formData.username}
-          onChange={(e) => setFormData({...formData, username: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={(e) => setFormData({...formData, email: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="password"
-          placeholder="Password"
-          value={formData.password}
-          onChange={(e) => setFormData({...formData, password: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="password"
-          placeholder="Confirm Password"
-          value={formData.confirmPassword}
-          onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="text"
-          placeholder="First Name"
-          value={formData.firstName}
-          onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="text"
-          placeholder="Last Name"
-          value={formData.lastName}
-          onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-          required
-        />
-      </div>
-      
-      <button type="submit">Create Account</button>
-      
-      <div className="help-text">
-        <p>Already have an account? <Link to="/login">Sign in</Link></p>
-        <p>Need an Admin or Partner account? Contact your administrator.</p>
-      </div>
-    </form>
-  );
-};
-```
-
-### **3. Auth Service Implementation (Simplified)**
-
-```typescript
-// authService.ts - Much cleaner implementation!
-import apiClient from './api';
-
-export enum UserType {
-  Admin = 0,
-  Partner = 1,
-  EndUser = 2
-}
-
-export interface LoginRequest {
-  username: string;
-  password: string;
-  rememberMe: boolean;
-  // UserType removed - auto-detected!
-}
-
-export interface RegisterRequest {
-  username: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-  firstName: string;
-  lastName: string;
-  // UserType removed - always EndUser!
-}
-
-export interface LoginResponse {
-  success: boolean;
-  message: string;
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt: string;
-  sessionId?: string;
-  user: {
-    id: string;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    fullName: string;
-    isActive: boolean;
-    lastLoginAt?: string;
-    createdDate: string;
-    roles: string[];
-    userType: UserType; // Detected by backend
-  };
-}
-
-export interface RegisterResponse {
-  success: boolean;
-  message: string;
-  user: {
-    id: string;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    fullName: string;
-    userType: UserType; // Always EndUser
-    isActive: boolean;
-    createdDate: string;
-    roles: string[];
-  };
-}
-
-export class AuthService {
-  // ✅ Simplified login - no userType parameter!
-  static async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const response = await apiClient.post('/api/auth/login', credentials);
-    
-    // Store tokens and user info
-    if (response.data.accessToken) {
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('userType', response.data.user.userType.toString());
-      localStorage.setItem('userRoles', JSON.stringify(response.data.user.roles));
-    }
-    
-    return response.data;
-  }
-
-  // ✅ Simplified register - always EndUser
-  static async register(userData: RegisterRequest): Promise<RegisterResponse> {
-    const response = await apiClient.post('/api/auth/register', userData);
-    return response.data;
-  }
-
-  // Logout user
-  static async logout(): Promise<void> {
-    try {
-      await apiClient.post('/api/auth/logout');
-    } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('userType');
-      localStorage.removeItem('userRoles');
-    }
-  }
-
-  // Refresh token
-  static async refreshToken(): Promise<LoginResponse> {
-    const response = await apiClient.post('/api/auth/refresh-token');
-    
-    if (response.data.accessToken) {
-      localStorage.setItem('accessToken', response.data.accessToken);
-    }
-    
-    return response.data;
-  }
-
-  // ✅ Get detected user type
-  static getCurrentUserType(): UserType | null {
-    const userType = localStorage.getItem('userType');
-    return userType ? Number(userType) as UserType : null;
-  }
-
-  // ✅ Check user roles
-  static getUserRoles(): string[] {
-    const roles = localStorage.getItem('userRoles');
-    return roles ? JSON.parse(roles) : [];
-  }
-
-  // ✅ Role-based access control
-  static hasRole(role: string): boolean {
-    const roles = this.getUserRoles();
-    return roles.includes(role);
-  }
-
-  static isAdmin(): boolean {
-    return this.getCurrentUserType() === UserType.Admin;
-  }
-
-  static isPartner(): boolean {
-    return this.getCurrentUserType() === UserType.Partner;
-  }
-
-  static isEndUser(): boolean {
-    return this.getCurrentUserType() === UserType.EndUser;
-  }
-
-  // Check if authenticated
-  static isAuthenticated(): boolean {
-    const token = localStorage.getItem('accessToken');
-    if (!token) return false;
-    
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const currentTime = Date.now() / 1000;
-      return payload.exp > currentTime;
-    } catch {
-      return false;
-    }
-  }
-}
-```
-
-### **4. Route Protection Based on Detected UserType**
-
-```typescript
-// ProtectedRoute.tsx
-import { AuthService } from '../services/authService';
-
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-  allowedRoles?: string[];
-  allowedUserTypes?: UserType[];
-}
-
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
-  children, 
-  allowedRoles, 
-  allowedUserTypes 
-}) => {
-  const isAuthenticated = AuthService.isAuthenticated();
-  const userType = AuthService.getCurrentUserType();
-  const userRoles = AuthService.getUserRoles();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
-  }
-
-  // Check user type access
-  if (allowedUserTypes && userType !== null) {
-    if (!allowedUserTypes.includes(userType)) {
-      return <Navigate to="/unauthorized" />;
-    }
-  }
-
-  // Check role-based access
-  if (allowedRoles) {
-    const hasRequiredRole = allowedRoles.some(role => userRoles.includes(role));
-    if (!hasRequiredRole) {
-      return <Navigate to="/unauthorized" />;
-    }
-  }
-
-  return <>{children}</>;
-};
-
-// Usage examples
-const AppRoutes = () => (
-  <Routes>
-    <Route path="/login" element={<LoginForm />} />
-    <Route path="/register" element={<RegisterForm />} />
-    
-    {/* Admin routes */}
-    <Route 
-      path="/admin/*" 
-      element={
-        <ProtectedRoute allowedUserTypes={[UserType.Admin]}>
-          <AdminDashboard />
-        </ProtectedRoute>
-      } 
-    />
-    
-    {/* Partner routes */}
-    <Route 
-      path="/partner/*" 
-      element={
-        <ProtectedRoute allowedUserTypes={[UserType.Partner]}>
-          <PartnerDashboard />
-        </ProtectedRoute>
-      } 
-    />
-    
-    {/* EndUser routes */}
-    <Route 
-      path="/dashboard" 
-      element={
-        <ProtectedRoute allowedUserTypes={[UserType.EndUser]}>
-          <UserDashboard />
-        </ProtectedRoute>
-      } 
-    />
-  </Routes>
-);
-```
-
-## 🔧 **Environment Configuration (Unchanged)**
-
+#### 2. Get current token configuration:
 ```bash
-# .env
-VITE_API_BASE_URL=http://localhost:1312
-VITE_APP_NAME=Authentication Module
-VITE_TOKEN_REFRESH_THRESHOLD=300000
+GET /api/admin/token-config
+Authorization: Bearer {access_token}
+
+# Response:
+{
+  "accessTokenExpiryMinutes": 30,
+  "refreshTokenExpiryDays": 7,
+  "rememberMeTokenExpiryDays": 30,
+  "accessTokenExpiryDisplay": "30 minutes",    # ← For UI display
+  "refreshTokenExpiryDisplay": "7.0 days",     # ← For UI display
+  "rememberMeTokenExpiryDisplay": "30.0 days"  # ← For UI display
+}
 ```
 
-## 📝 **Testing Information**
-
-### **Available Test Users:**
-```
-Admin:
-- Username: admin
-- Password: Admin@123
-- Will be detected as: UserType.Admin (0)
-
-Partner:
-- Username: partner  
-- Password: Partner@123
-- Will be detected as: UserType.Partner (1)
-
-End User:
-- Username: user
-- Password: User@123  
-- Will be detected as: UserType.EndUser (2)
-```
-
-### **Sample API Calls:**
+#### 3. Update configuration and see immediate impact:
 ```bash
-# ✅ NEW - Auto-detect login (any user type)
-curl -X POST http://localhost:1312/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "password": "Admin@123",
-    "rememberMe": false
-  }'
-
-# ✅ NEW - Register EndUser only
-curl -X POST http://localhost:1312/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "newuser",
-    "email": "newuser@test.com",
-    "password": "Password123!",
-    "confirmPassword": "Password123!",
-    "firstName": "New",
-    "lastName": "User"
-  }'
-```
-
-## 🏆 **Benefits of Auto-Detect Implementation:**
-
-### ✅ **User Experience:**
-- **No confusing dropdowns** - users just enter credentials
-- **Faster login process** - fewer steps
-- **Intuitive flow** - like modern apps (Gmail, Facebook, etc.)
-- **Clear error messages** - "Invalid credentials" instead of "user type mismatch"
-
-### ✅ **Security Improvements:**
-- **No self-assignment** of admin roles in registration
-- **Public registration = EndUser only** (secure by default)
-- **Admin/Partner creation** requires admin privileges
-- **Clear audit trail** with detected user types
-
-### ✅ **Developer Experience:**
-- **Simpler frontend code** - no userType management in forms
-- **Cleaner API** - single login endpoint
-- **Better business logic** - follows real-world patterns
-- **Easier testing** - fewer combinations to test
-
-### ✅ **Maintainability:**
-- **Less UI complexity** - no dropdown state management
-- **Fewer edge cases** - no user type validation on frontend
-- **Strategy pattern** still efficient with backend caching
-- **Future-proof** - easy to add new user types
-
-## ⚠️ **Important Notes:**
-
-1. **UserType is auto-detected** - không cần dropdown trong login form
-2. **Public registration = EndUser only** - for security
-3. **Admin/Partner accounts** must be created by Admin via separate endpoint
-4. **Backend detects and returns** userType in response
-5. **CORS is enabled** for all origins
-6. **Backend running** on `http://localhost:1312`
-
-## 🎯 **Action Items for Frontend:**
-
-- [ ] **Remove UserType dropdowns** from login form ✅ Major UX improvement
-- [ ] **Remove UserType dropdown** from register form ✅ Security improvement  
-- [ ] **Update AuthService** to use simplified `/api/auth/login` endpoint
-- [ ] **Implement role-based routing** using detected userType from response
-- [ ] **Update UI messaging** to reflect "public registration = EndUser"
-- [ ] **Test auto-detection** with all user types (Admin, Partner, EndUser)
-- [ ] **Implement proper error handling** for simplified error responses
-
----
-
-**🚀 Experience the future of authentication - Simple, Secure, and User-Friendly!** 
-
-**Backend is ready with auto-detect enabled. Frontend will be much cleaner and more intuitive!** ✨
-
-### **Authentication Endpoints:**
-
-#### **1. Login Endpoint (WITH UserType)**
-```
-POST /api/auth/login/{userType}
-```
-
-**Path Parameters:**
-- `userType` (required): 0=Admin, 1=Partner, 2=EndUser
-
-**Request Body:**
-```typescript
-interface LoginRequest {
-  username: string;          // Required - email or username
-  password: string;          // Required - user password  
-  rememberMe: boolean;       // Optional - extends token life
-  deviceInfo?: string;       // Optional - auto-populated
-  ipAddress?: string;        // Optional - auto-populated
-}
-```
-
-**Success Response (200):**
-```typescript
-interface LoginResponse {
-  success: boolean;          // Always true for 200
-  message: string;           // Success message
-  accessToken: string;       // JWT access token
-  refreshToken?: string;     // May be null if HTTP-only cookies
-  expiresAt: string;         // ISO date string
-  sessionId?: string;        // Session identifier
-  user: {
-    id: string;              // User UUID
-    username: string;        // Username
-    email: string;           // Email address
-    firstName: string;       // First name
-    lastName: string;        // Last name
-    fullName: string;        // "firstName lastName"
-    isActive: boolean;       // Account status
-    lastLoginAt?: string;    // ISO date string
-    createdDate: string;     // ISO date string
-    roles: string[];         // User roles array
-    userType: UserType;      // 0=Admin, 1=Partner, 2=EndUser
-  };
-}
-```
-
-**Error Response (400/401):**
-```typescript
-interface ApiErrorResponse {
-  success: false;
-  message: string;           // Error description
-  errors?: {                 // Validation errors (optional)
-    [field: string]: string[];
-  };
-}
-```
-
-#### **2. Register Endpoint (WITH UserType)**
-```
-POST /api/auth/register
-```
-
-**Request Body:**
-```typescript
-interface RegisterRequest {
-  username: string;          // Required - unique username
-  email: string;            // Required - valid email
-  password: string;         // Required - min 8 chars
-  confirmPassword: string;  // Required - must match password
-  firstName: string;        // Required
-  lastName: string;         // Required
-  userType: UserType;       // Required - 0=Admin, 1=Partner, 2=EndUser
-}
-```
-
-**Success Response (201):**
-```typescript
-interface RegisterResponse {
-  success: boolean;          // Always true for 201
-  message: string;           // Success message
-  user: {
-    id: string;              // New user UUID
-    username: string;        // Username
-    email: string;           // Email
-    firstName: string;       // First name
-    lastName: string;        // Last name
-    fullName: string;        // Full name
-    userType: UserType;      // Registered user type
-    isActive: boolean;       // Account status
-    createdDate: string;     // ISO date string
-    roles: string[];         // Assigned roles
-  };
-}
-```
-
-#### **3. Other Endpoints (Unchanged)**
-```
-POST /api/auth/logout               # Logout user
-POST /api/auth/refresh-token        # Refresh access token
-GET  /api/admin/token-config        # Get token configuration
-PUT  /api/admin/token-config        # Update token configuration
-```
-
-## 🎨 **Frontend Implementation Required:**
-
-### **1. Login Form with UserType Dropdown**
-
-```typescript
-// Login Component
-const LoginForm = () => {
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    userType: UserType.EndUser, // Default to EndUser
-    rememberMe: false
-  });
-
-  const handleLogin = async (e: FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      // Call login API with userType in URL
-      const response = await authService.login(
-        formData.userType, 
-        {
-          username: formData.username,
-          password: formData.password,
-          rememberMe: formData.rememberMe
-        }
-      );
-      
-      // Handle success
-      console.log('Login successful:', response.data);
-      
-    } catch (error) {
-      // Handle error
-      console.error('Login failed:', error.response?.data);
-    }
-  };
-
-  return (
-    <form onSubmit={handleLogin}>
-      <div>
-        <label>User Type:</label>
-        <select 
-          value={formData.userType} 
-          onChange={(e) => setFormData({...formData, userType: Number(e.target.value)})}
-          required
-        >
-          <option value={UserType.EndUser}>End User</option>
-          <option value={UserType.Partner}>Partner</option>
-          <option value={UserType.Admin}>Admin</option>
-        </select>
-      </div>
-      
-      <div>
-        <input
-          type="text"
-          placeholder="Username or Email"
-          value={formData.username}
-          onChange={(e) => setFormData({...formData, username: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="password"
-          placeholder="Password"
-          value={formData.password}
-          onChange={(e) => setFormData({...formData, password: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <label>
-          <input
-            type="checkbox"
-            checked={formData.rememberMe}
-            onChange={(e) => setFormData({...formData, rememberMe: e.target.checked})}
-          />
-          Remember Me
-        </label>
-      </div>
-      
-      <button type="submit">Login</button>
-    </form>
-  );
-};
-```
-
-### **2. Register Form with UserType Dropdown**
-
-```typescript
-// Register Component
-const RegisterForm = () => {
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: '',
-    userType: UserType.EndUser // Default to EndUser
-  });
-
-  const handleRegister = async (e: FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const response = await authService.register(formData);
-      console.log('Registration successful:', response.data);
-      
-      // Redirect to login or show success message
-      
-    } catch (error) {
-      console.error('Registration failed:', error.response?.data);
-    }
-  };
-
-  return (
-    <form onSubmit={handleRegister}>
-      <div>
-        <label>Account Type:</label>
-        <select 
-          value={formData.userType} 
-          onChange={(e) => setFormData({...formData, userType: Number(e.target.value)})}
-          required
-        >
-          <option value={UserType.EndUser}>End User</option>
-          <option value={UserType.Partner}>Partner</option>
-          <option value={UserType.Admin}>Admin</option>
-        </select>
-      </div>
-      
-      <div>
-        <input
-          type="text"
-          placeholder="Username"
-          value={formData.username}
-          onChange={(e) => setFormData({...formData, username: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={(e) => setFormData({...formData, email: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="password"
-          placeholder="Password"
-          value={formData.password}
-          onChange={(e) => setFormData({...formData, password: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="password"
-          placeholder="Confirm Password"
-          value={formData.confirmPassword}
-          onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="text"
-          placeholder="First Name"
-          value={formData.firstName}
-          onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-          required
-        />
-      </div>
-      
-      <div>
-        <input
-          type="text"
-          placeholder="Last Name"
-          value={formData.lastName}
-          onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-          required
-        />
-      </div>
-      
-      <button type="submit">Register</button>
-    </form>
-  );
-};
-```
-
-### **3. Auth Service Implementation**
-
-```typescript
-// authService.ts
-import apiClient from './api';
-
-export enum UserType {
-  Admin = 0,
-  Partner = 1,
-  EndUser = 2
+PUT /api/admin/token-config
+{
+  "accessTokenExpiryMinutes": 5,
+  "refreshTokenExpiryDays": 0.25,
+  "rememberMeTokenExpiryDays": 1
 }
 
-export interface LoginRequest {
-  username: string;
-  password: string;
-  rememberMe: boolean;
-  deviceInfo?: string;
-  ipAddress?: string;
-}
-
-export interface RegisterRequest {
-  username: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-  firstName: string;
-  lastName: string;
-  userType: UserType;
-}
-
-export interface LoginResponse {
-  success: boolean;
-  message: string;
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt: string;
-  sessionId?: string;
-  user: {
-    id: string;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    fullName: string;
-    isActive: boolean;
-    lastLoginAt?: string;
-    createdDate: string;
-    roles: string[];
-    userType: UserType;
-  };
-}
-
-export interface RegisterResponse {
-  success: boolean;
-  message: string;
-  user: {
-    id: string;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    fullName: string;
-    userType: UserType;
-    isActive: boolean;
-    createdDate: string;
-    roles: string[];
-  };
-}
-
-export class AuthService {
-  // Login with specific user type
-  static async login(userType: UserType, credentials: LoginRequest): Promise<LoginResponse> {
-    const response = await apiClient.post(`/api/auth/login/${userType}`, credentials);
-    
-    // Store access token
-    if (response.data.accessToken) {
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('userType', userType.toString());
-    }
-    
-    return response.data;
-  }
-
-  // Register new user
-  static async register(userData: RegisterRequest): Promise<RegisterResponse> {
-    const response = await apiClient.post('/api/auth/register', userData);
-    return response.data;
-  }
-
-  // Logout user
-  static async logout(): Promise<void> {
-    try {
-      await apiClient.post('/api/auth/logout');
-    } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('userType');
-    }
-  }
-
-  // Refresh token
-  static async refreshToken(): Promise<LoginResponse> {
-    const response = await apiClient.post('/api/auth/refresh-token');
-    
-    if (response.data.accessToken) {
-      localStorage.setItem('accessToken', response.data.accessToken);
-    }
-    
-    return response.data;
-  }
-
-  // Get current user type
-  static getCurrentUserType(): UserType | null {
-    const userType = localStorage.getItem('userType');
-    return userType ? Number(userType) as UserType : null;
-  }
-
-  // Check if authenticated
-  static isAuthenticated(): boolean {
-    const token = localStorage.getItem('accessToken');
-    if (!token) return false;
-    
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const currentTime = Date.now() / 1000;
-      return payload.exp > currentTime;
-    } catch {
-      return false;
-    }
-  }
-}
+# New logins will get:
+# - Access token: 5 minutes
+# - Refresh token: 6 hours 
+# - Remember me: 1 day
 ```
 
-### **4. API Client Configuration**
+### 🎯 **Frontend Integration Tips:**
 
-```typescript
-// api.ts  
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:1312';
-
-export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Request interceptor
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Response interceptor
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      try {
-        const refreshResponse = await axios.post(
-          `${API_BASE_URL}/api/auth/refresh-token`,
-          {},
-          { withCredentials: true }
-        );
-        
-        const { accessToken } = refreshResponse.data;
-        localStorage.setItem('accessToken', accessToken);
-        
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        return apiClient(originalRequest);
-        
-      } catch (refreshError) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('userType');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
-      }
-    }
-    
-    return Promise.reject(error);
-  }
-);
-
-export default apiClient;
-```
-
-## 🔧 **Environment Configuration**
-
-```bash
-# .env
-VITE_API_BASE_URL=http://localhost:1312
-VITE_APP_NAME=Authentication Module
-VITE_TOKEN_REFRESH_THRESHOLD=300000
-```
-
-## 📝 **Testing Information**
-
-### **Available Test Users:**
-```
-Admin:
-- Username: admin
-- Password: Admin@123
-- UserType: 0 (Admin)
-
-Partner:
-- Username: partner  
-- Password: Partner@123
-- UserType: 1 (Partner)
-
-End User:
-- Username: user
-- Password: User@123  
-- UserType: 2 (EndUser)
-```
-
-### **Sample API Calls:**
-```bash
-# Login as Admin
-curl -X POST http://localhost:1312/api/auth/login/0 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "password": "Admin@123",
-    "rememberMe": false
-  }'
-
-# Register new EndUser
-curl -X POST http://localhost:1312/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "newuser",
-    "email": "newuser@test.com",
-    "password": "Password123!",
-    "confirmPassword": "Password123!",
-    "firstName": "New",
-    "lastName": "User",
-    "userType": 2
-  }'
-```
-
-## ⚠️ **Important Notes:**
-
-1. **UserType is REQUIRED** in login URL path parameter
-2. **UserType dropdown** must be implemented in both login and register forms  
-3. **CORS is enabled** for all origins
-4. **Backend running** on `http://localhost:1312`
-5. **Remember to handle validation errors** from API responses
-6. **Store userType** in localStorage for session management
-
-## 🎯 **Action Items for Frontend:**
-
-- [ ] Add UserType dropdown to login form
-- [ ] Add UserType dropdown to register form  
-- [ ] Update AuthService to use `/login/{userType}` endpoint
-- [ ] Implement proper error handling for validation
-- [ ] Store and manage userType in localStorage
-- [ ] Test all user types (Admin, Partner, EndUser)
-- [ ] Update TypeScript interfaces with exact API response structure
-
----
-
-**Backend API is ready and waiting for frontend implementation!** 🚀
+1. **Store countdown data from login response**
+2. **Fetch current config on admin page load**
+3. **Update countdowns when config changes**
+4. **Show impact warnings before applying changes**
+5. **Refresh user's own countdown timers after config updates**

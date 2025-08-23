@@ -10,7 +10,7 @@ export const useTokenConfigLoader = () => {
 
   useEffect(() => {
     if (!config && !loading && !error) {
-      loadConfig().catch(console.error);
+      loadConfig().catch(() => {});
     }
   }, [config, loading, error, loadConfig]);
 

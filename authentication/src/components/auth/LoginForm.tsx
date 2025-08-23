@@ -19,6 +19,7 @@ import {
   ArrowRightOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigationProtection } from '../../hooks/useNavigationProtection';
 import toast from 'react-hot-toast';
 
 const { Title, Text, Paragraph } = Typography;
@@ -36,6 +37,9 @@ const LoginForm: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Enable navigation protection
+  useNavigationProtection();
+
   // Get the intended destination from location state
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
 
@@ -51,7 +55,12 @@ const LoginForm: React.FC = () => {
       });
 
       toast.success('Login successful!');
+      
+      // Replace current history entry to prevent back navigation to auth pages
       navigate(from, { replace: true });
+      
+      // Clear the auth pages from browser history
+      window.history.replaceState(null, '', from);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       toast.error(errorMessage);

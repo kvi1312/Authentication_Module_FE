@@ -1,4 +1,3 @@
-// User Types
 export const UserType = {
   Admin: 0,
   Partner: 1,
@@ -7,7 +6,6 @@ export const UserType = {
 
 export type UserType = typeof UserType[keyof typeof UserType];
 
-// Base API Response
 export interface ApiResponse<T> {
   success: boolean;
   message: string;
@@ -15,14 +13,12 @@ export interface ApiResponse<T> {
   errors?: { [key: string]: string[] };
 }
 
-// Error Response
 export interface ApiError {
   message: string;
   errors?: { [key: string]: string[] };
   statusCode: number;
 }
 
-// User Registration (Simplified - Always EndUser for public registration)
 export interface RegisterRequest {
   username: string;
   email: string;
@@ -30,7 +26,6 @@ export interface RegisterRequest {
   confirmPassword: string;
   firstName: string;
   lastName: string;
-  // userType removed - always EndUser for security
 }
 
 export interface RegisterResponse {
@@ -49,7 +44,6 @@ export interface RegisterResponse {
   };
 }
 
-// User Login
 export interface LoginRequest {
   username: string;
   password: string;
@@ -65,6 +59,11 @@ export interface LoginResponse {
   refreshToken?: string;
   rememberMeToken?: string;
   expiresAt?: string;
+  
+  accessTokenExpiresAt?: string;
+  refreshTokenExpiresAt?: string;
+  rememberMeTokenExpiresAt?: string;
+  
   sessionId?: string;
   user?: {
     id: string;
@@ -81,34 +80,34 @@ export interface LoginResponse {
   };
 }
 
-// Token Refresh
-export interface RefreshTokenRequest {
-  // Empty body - refresh token sent via HTTP-only cookie
-}
+export type RefreshTokenRequest = Record<string, never>;
 
 export interface RefreshTokenResponse {
   success: boolean;
   message: string;
   accessToken?: string;
   expiresAt?: string;
+  
+  accessTokenExpiresAt?: string;
+  refreshTokenExpiresAt?: string;
+  rememberMeTokenExpiresAt?: string;
+  
   sessionId?: string;
 }
 
-// User Logout
-export interface LogoutRequest {
-  // Empty body - requires Authorization header
-}
+export type LogoutRequest = Record<string, never>;
 
 export interface LogoutResponse {
   success: boolean;
   message: string;
 }
 
-// Token Configuration
 export interface TokenConfigResponse {
   accessTokenExpiryMinutes: number;
   refreshTokenExpiryDays: number;
   rememberMeTokenExpiryDays: number;
+  lastUpdated?: string;
+  updatedBy?: string;
   accessTokenExpiryDisplay: string;
   refreshTokenExpiryDisplay: string;
   rememberMeTokenExpiryDisplay: string;
@@ -124,9 +123,21 @@ export interface UpdateTokenConfigResponse {
   success: boolean;
   message: string;
   config?: TokenConfigResponse;
+  warning?: string;
 }
 
-// Authentication State
+export interface TokenPresetResponse {
+  message: string;
+  presets: {
+    [key: string]: {
+      access: string;
+      refresh: string;
+      remember: string;
+    };
+  };
+  usage: string;
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
   user: UserInfo | null;
@@ -151,7 +162,6 @@ export interface UserInfo {
 }
 
 export interface AuthContextType {
-  // State
   isAuthenticated: boolean;
   user: UserInfo | null;
   loading: boolean;
@@ -159,47 +169,18 @@ export interface AuthContextType {
   accessToken: string | null;
   tokenExpiresAt: Date | null;
   
-  // Actions
   login: (credentials: LoginRequest) => Promise<void>;
   register: (userData: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<boolean>;
   clearError: () => void;
   
-  // Utilities
   hasRole: (role: string) => boolean;
   isAdmin: () => boolean;
   isPartner: () => boolean;
   isEndUser: () => boolean;
 }
 
-// Token Configuration State
-export interface TokenConfigState {
-  config: TokenConfigResponse | null;
-  loading: boolean;
-  error: string | null;
-  isDirty: boolean;
-}
-
-export interface TokenConfigContextType {
-  // State
-  config: TokenConfigResponse | null;
-  loading: boolean;
-  error: string | null;
-  isDirty: boolean;
-  
-  // Actions
-  loadConfig: () => Promise<void>;
-  updateConfig: (config: UpdateTokenConfigRequest) => Promise<void>;
-  resetConfig: () => Promise<void>;
-  applyPreset: (preset: string) => Promise<void>;
-  
-  // Form helpers
-  setDirty: (dirty: boolean) => void;
-  clearError: () => void;
-}
-
-// Error Response Types
 export interface ApiErrorResponse {
   success: false;
   message: string;
@@ -207,20 +188,16 @@ export interface ApiErrorResponse {
   statusCode: number;
 }
 
-// HTTP Status Codes
 export const ApiStatusCodes = {
-  // Success
   OK: 200,
   CREATED: 201,
   
-  // Client Errors
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
   
-  // Server Errors
   INTERNAL_SERVER_ERROR: 500,
   SERVICE_UNAVAILABLE: 503
 } as const;

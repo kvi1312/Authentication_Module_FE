@@ -2,6 +2,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import AuthGuard from './components/common/AuthGuard';
+import { NavigationProtector } from './hooks/useNavigationProtection';
 import LoginForm from './components/auth/LoginForm';
 import RegisterForm from './components/auth/RegisterForm';
 import Home from './pages/Home';
@@ -15,15 +17,30 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="App">
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<LoginForm />} />
-            <Route path="/register" element={<RegisterForm />} />
-            <Route path="/unauthorized" element={<Unauthorized />} />
+        <NavigationProtector>
+          <div className="App">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              
+              <Route 
+                path="/login" 
+                element={
+                  <AuthGuard requireAuth={false}>
+                    <LoginForm />
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/register" 
+                element={
+                  <AuthGuard requireAuth={false}>
+                    <RegisterForm />
+                  </AuthGuard>
+                } 
+              />
+              
+              <Route path="/unauthorized" element={<Unauthorized />} />
 
-            {/* Protected routes */}
             <Route
               path="/dashboard"
               element={
@@ -75,7 +92,8 @@ function App() {
               },
             }}
           />
-        </div>
+          </div>
+        </NavigationProtector>
       </Router>
     </AuthProvider>
   );

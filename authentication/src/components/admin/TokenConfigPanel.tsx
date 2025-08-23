@@ -1,364 +1,448 @@
-import React, { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { 
-  CogIcon,
-  ClockIcon,
-  KeyIcon,
-  ArrowPathIcon,
-  CheckIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
-import { useTokenConfigLoader, useTokenConfigForm } from '../../hooks/useTokenConfig';
-import { TOKEN_PRESETS } from '../../utils/constants';
-import type { UpdateTokenConfigRequest } from '../../types/auth.types';
-import LoadingSpinner from '../common/LoadingSpinner';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Card,
+  Form,
+  Select,
+  Button,
+  Space,
+  Typography,
+  Alert,
+  Row,
+  Col,
+  Statistic,
+  Tag,
+  message,
+  Divider
+} from 'antd';
+
+import {
+  SettingOutlined,
+  ReloadOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  HistoryOutlined,
+  ThunderboltOutlined
+} from '@ant-design/icons';
+import { tokenConfigService } from '../../services/tokenConfigService';
+import type { TokenConfigResponse } from '../../types/auth.types';
+
+const { Title, Text, Paragraph } = Typography;
+const { Option } = Select;
+
+// Use TokenConfigResponse interface from types instead of local interface
+// interface TokenConfig is replaced by TokenConfigResponse from types
+
+// Access Token options: 1-60 minutes
+const ACCESS_TOKEN_OPTIONS = [
+  { value: 1, label: '1 min' },
+  { value: 2, label: '2 min' },
+  { value: 5, label: '5 min' },
+  { value: 10, label: '10 min' },
+  { value: 15, label: '15 min' },
+  { value: 20, label: '20 min' },
+  { value: 30, label: '30 min' },
+  { value: 45, label: '45 min' },
+  { value: 60, label: '60 min (1 hour)' }
+];
+
+// Refresh Token options: 0.01-7 days (15 minutes to 1 week)
+const REFRESH_TOKEN_OPTIONS = [
+  { value: 0.01042, label: '15 min (0.01 day)' },
+  { value: 0.02083, label: '30 min (0.02 day)' },
+  { value: 0.04167, label: '1 hour (0.04 day)' },
+  { value: 0.08333, label: '2 hours (0.08 day)' },
+  { value: 0.25, label: '6 hours (0.25 day)' },
+  { value: 0.5, label: '12 hours (0.5 day)' },
+  { value: 1, label: '1 day' },
+  { value: 2, label: '2 days' },
+  { value: 3, label: '3 days' },
+  { value: 7, label: '7 days (1 week)' }
+];
+
+// Remember Me Token options: 0.1-30 days (2.4 hours to 1 month)
+const REMEMBER_TOKEN_OPTIONS = [
+  { value: 0.1, label: '2.4 hours (0.1 day)' },
+  { value: 0.25, label: '6 hours (0.25 day)' },
+  { value: 0.5, label: '12 hours (0.5 day)' },
+  { value: 1, label: '1 day' },
+  { value: 2, label: '2 days' },
+  { value: 3, label: '3 days' },
+  { value: 7, label: '7 days (1 week)' },
+  { value: 14, label: '14 days (2 weeks)' },
+  { value: 30, label: '30 days (1 month)' }
+];
+
+interface TokenPreset {
+  name: string;
+  label: string;
+  description: string;
+  access: string;
+  refresh: string;
+  remember: string;
+  config: {
+    accessTokenExpiryMinutes: number;
+    refreshTokenExpiryDays: number;
+    rememberMeTokenExpiryDays: number;
+  };
+  color: string;
+  icon: React.ReactNode;
+}
+
+const TOKEN_PRESETS: TokenPreset[] = [
+  {
+    name: 'very-short',
+    label: 'Very Short',
+    description: 'High Security - Access 2min, Refresh 30min, Remember 2.4hrs',
+    access: '2 min',
+    refresh: '30 min',
+    remember: '2.4 hours',
+    config: {
+      accessTokenExpiryMinutes: 2,
+      refreshTokenExpiryDays: 0.02083, // 30 minutes
+      rememberMeTokenExpiryDays: 0.1 // 2.4 hours
+    },
+    color: 'red',
+    icon: <ThunderboltOutlined />
+  },
+  {
+    name: 'short',
+    label: 'Short',
+    description: 'Balanced Security - Access 5min, Refresh 6hrs, Remember 1day',
+    access: '5 min',
+    refresh: '6 hours',
+    remember: '1 day',
+    config: {
+      accessTokenExpiryMinutes: 5,
+      refreshTokenExpiryDays: 0.25, // 6 hours
+      rememberMeTokenExpiryDays: 1
+    },
+    color: 'orange',
+    icon: <ClockCircleOutlined />
+  },
+  {
+    name: 'medium',
+    label: 'Medium',
+    description: 'Default - Access 15min, Refresh 1day, Remember 1week',
+    access: '15 min',
+    refresh: '1 day',
+    remember: '1 week',
+    config: {
+      accessTokenExpiryMinutes: 15,
+      refreshTokenExpiryDays: 1,
+      rememberMeTokenExpiryDays: 7
+    },
+    color: 'blue',
+    icon: <CheckCircleOutlined />
+  },
+  {
+    name: 'long',
+    label: 'Long',
+    description: 'Convenient - Access 1hr, Refresh 1week, Remember 1month',
+    access: '1 hour',
+    refresh: '1 week',
+    remember: '1 month',
+    config: {
+      accessTokenExpiryMinutes: 60,
+      refreshTokenExpiryDays: 7,
+      rememberMeTokenExpiryDays: 30
+    },
+    color: 'green',
+    icon: <HistoryOutlined />
+  }
+];
 
 const TokenConfigPanel: React.FC = () => {
-  const { config, loading: configLoading, error: configError, isLoaded } = useTokenConfigLoader();
-  const {
-    loading: actionLoading,
-    error: actionError,
-    isDirty,
-    handleSave,
-    handleReset,
-    handlePreset,
-    setDirty,
-    clearError,
-  } = useTokenConfigForm();
-
-  const [, setSelectedPreset] = useState<string>('');
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    setValue,
-    watch,
-  } = useForm<UpdateTokenConfigRequest>({
-    defaultValues: {
-      accessTokenExpiryMinutes: 30,
-      refreshTokenExpiryDays: 7,
-      rememberMeTokenExpiryDays: 30,
-    },
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
+  const [currentConfig, setCurrentConfig] = useState<TokenConfigResponse>({
+    accessTokenExpiryMinutes: 30,
+    refreshTokenExpiryDays: 1,
+    rememberMeTokenExpiryDays: 7,
+    accessTokenExpiryDisplay: '30 minutes',
+    refreshTokenExpiryDisplay: '1 day',
+    rememberMeTokenExpiryDisplay: '7 days'
   });
+  const [selectedPreset, setSelectedPreset] = useState<string>('medium');
 
-  // Watch form values to detect changes
-  const formValues = watch();
-
-  useEffect(() => {
-    if (config && isLoaded) {
-      setValue('accessTokenExpiryMinutes', config.accessTokenExpiryMinutes);
-      setValue('refreshTokenExpiryDays', config.refreshTokenExpiryDays);
-      setValue('rememberMeTokenExpiryDays', config.rememberMeTokenExpiryDays);
-      reset({
-        accessTokenExpiryMinutes: config.accessTokenExpiryMinutes,
-        refreshTokenExpiryDays: config.refreshTokenExpiryDays,
-        rememberMeTokenExpiryDays: config.rememberMeTokenExpiryDays,
-      });
-    }
-  }, [config, isLoaded, setValue, reset]);
-
-  useEffect(() => {
-    if (config) {
-      const hasChanges = 
-        formValues.accessTokenExpiryMinutes !== config.accessTokenExpiryMinutes ||
-        formValues.refreshTokenExpiryDays !== config.refreshTokenExpiryDays ||
-        formValues.rememberMeTokenExpiryDays !== config.rememberMeTokenExpiryDays;
+  // Load current configuration
+  const loadCurrentConfig = useCallback(async () => {
+    try {
+      setLoading(true);
+      // API call to get current config
+      const response = await tokenConfigService.getCurrentConfig();
+      setCurrentConfig(response);
       
-      setDirty(hasChanges);
+      // Update form with current config
+      form.setFieldsValue({
+        accessTokenExpiryMinutes: response.accessTokenExpiryMinutes,
+        refreshTokenExpiryDays: response.refreshTokenExpiryDays,
+        rememberMeTokenExpiryDays: response.rememberMeTokenExpiryDays
+      });
+    } catch {
+      message.error('Unable to load current configuration');
+    } finally {
+      setLoading(false);
     }
-  }, [formValues, config, setDirty]);
+  }, [form]);
 
-  const onSubmit = async (data: UpdateTokenConfigRequest) => {
+  useEffect(() => {
+    loadCurrentConfig();
+  }, [loadCurrentConfig]);
+
+  const handlePresetSelect = (preset: TokenPreset) => {
+    setSelectedPreset(preset.name);
+    form.setFieldsValue(preset.config);
+  };
+
+  const handleCustomChange = () => {
+    setSelectedPreset('custom');
+  };
+
+  const handleSaveConfig = async (values: {
+    accessTokenExpiryMinutes: number;
+    refreshTokenExpiryDays: number;
+    rememberMeTokenExpiryDays: number;
+  }) => {
+    if (!values.accessTokenExpiryMinutes || !values.refreshTokenExpiryDays || !values.rememberMeTokenExpiryDays) {
+      message.error('Please fill in all required fields');
+      return;
+    }
+    
     try {
-      clearError();
-      const success = await handleSave(data);
-      if (success) {
-        toast.success('Token configuration updated successfully');
+      setLoading(true);
+      
+      const response = await tokenConfigService.updateConfig({
+        accessTokenExpiryMinutes: values.accessTokenExpiryMinutes,
+        refreshTokenExpiryDays: values.refreshTokenExpiryDays,
+        rememberMeTokenExpiryDays: values.rememberMeTokenExpiryDays
+      });
+      
+      if (response.config) {
+        setCurrentConfig(response.config);
       }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update configuration');
+      
+      message.success(response.message || 'Token configuration updated successfully!');
+      
+      if (response.warning) {
+        message.warning(response.warning);
+      }
+    } catch {
+      message.error('Unable to update configuration');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const onReset = async () => {
-    try {
-      clearError();
-      const success = await handleReset();
-      if (success) {
-        toast.success('Token configuration reset to defaults');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to reset configuration');
-    }
-  };
-
-  const onApplyPreset = async (preset: string) => {
-    try {
-      clearError();
-      const success = await handlePreset(preset);
-      if (success) {
-        toast.success(`Applied ${TOKEN_PRESETS[preset as keyof typeof TOKEN_PRESETS].name} preset`);
-        setSelectedPreset('');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to apply preset');
-    }
-  };
-
-  if (configLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner size="large" message="Loading token configuration..." />
-      </div>
-    );
-  }
-
-  if (configError) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
-        <div className="flex">
-          <XMarkIcon className="h-5 w-5 text-red-400" />
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">
-              Error loading configuration
-            </h3>
-            <p className="text-sm text-red-700 mt-2">{configError}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const renderPresetCard = (preset: TokenPreset) => (
+    <Card
+      key={preset.name}
+      size="small"
+      hoverable
+      onClick={() => handlePresetSelect(preset)}
+      style={{
+        borderColor: selectedPreset === preset.name ? '#1890ff' : undefined,
+        borderWidth: selectedPreset === preset.name ? 2 : 1
+      }}
+    >
+      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+        <Space>
+          <Tag color={preset.color}>{preset.icon}</Tag>
+          <Text strong>{preset.label}</Text>
+        </Space>
+        <Text type="secondary" style={{ fontSize: '12px' }}>
+          {preset.description}
+        </Text>
+        <Space direction="vertical" size="small">
+          <Text style={{ fontSize: '11px' }}>
+            <strong>Access:</strong> {preset.access}
+          </Text>
+          <Text style={{ fontSize: '11px' }}>
+            <strong>Refresh:</strong> {preset.refresh}
+          </Text>
+          <Text style={{ fontSize: '11px' }}>
+            <strong>Remember:</strong> {preset.remember}
+          </Text>
+        </Space>
+      </Space>
+    </Card>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex items-center">
-          <KeyIcon className="h-8 w-8 text-blue-500" />
-          <div className="ml-4">
-            <h1 className="text-2xl font-bold text-gray-900">Token Configuration</h1>
-            <p className="text-gray-600">
-              Manage JWT token expiry settings and security parameters
-            </p>
-          </div>
-        </div>
-      </div>
+    <div style={{ padding: '24px' }}>
+      <Title level={2}>
+        <SettingOutlined /> JWT Token Configuration
+      </Title>
+      
+      <Paragraph type="secondary">
+        Manage token lifetimes in the system. Configuration changes will affect all new login sessions.
+      </Paragraph>
 
-      {/* Current Configuration Display */}
-      {config && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Current Settings</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex items-center space-x-3">
-              <ClockIcon className="h-6 w-6 text-green-500" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Access Token</p>
-                <p className="text-sm text-gray-600">{config.accessTokenExpiryDisplay}</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <ArrowPathIcon className="h-6 w-6 text-blue-500" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Refresh Token</p>
-                <p className="text-sm text-gray-600">{config.refreshTokenExpiryDisplay}</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <CogIcon className="h-6 w-6 text-purple-500" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Remember Me</p>
-                <p className="text-sm text-gray-600">{config.rememberMeTokenExpiryDisplay}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Configuration Form */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-6">Update Configuration</h2>
+      {/* Current Configuration Info */}
+      <Card title="Current Configuration" style={{ marginBottom: '24px' }}>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Statistic 
+              title="Access Token" 
+              value={currentConfig.accessTokenExpiryDisplay}
+              prefix={<ClockCircleOutlined />}
+            />
+          </Col>
+          <Col span={8}>
+            <Statistic 
+              title="Refresh Token" 
+              value={currentConfig.refreshTokenExpiryDisplay}
+              prefix={<ReloadOutlined />}
+            />
+          </Col>
+          <Col span={8}>
+            <Statistic 
+              title="Remember Me Token" 
+              value={currentConfig.rememberMeTokenExpiryDisplay}
+              prefix={<HistoryOutlined />}
+            />
+          </Col>
+        </Row>
         
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Access Token Expiry */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Access Token Expiry (minutes)
-            </label>
-            <div className="mt-1">
-              <input
-                {...register('accessTokenExpiryMinutes', {
-                  required: 'Access token expiry is required',
-                  min: { value: 1, message: 'Minimum 1 minute' },
-                  max: { value: 1440, message: 'Maximum 1440 minutes (24 hours)' },
-                  valueAsNumber: true,
-                })}
-                type="number"
-                min="1"
-                max="1440"
-                className={`block w-full px-3 py-2 border ${
-                  errors.accessTokenExpiryMinutes ? 'border-red-300' : 'border-gray-300'
-                } rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-              />
-              {errors.accessTokenExpiryMinutes && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.accessTokenExpiryMinutes.message}
-                </p>
-              )}
-              <p className="mt-1 text-sm text-gray-500">
-                Short-lived tokens for API access (1-1440 minutes)
-              </p>
-            </div>
-          </div>
+        {currentConfig.lastUpdated && (
+          <Alert
+            style={{ marginTop: '16px' }}
+            type="info"
+            message={
+              <Text>
+                Last updated: {new Date(currentConfig.lastUpdated).toLocaleString('en-US')}
+                {currentConfig.updatedBy && ` by ${currentConfig.updatedBy}`}
+              </Text>
+            }
+          />
+        )}
+      </Card>
 
-          {/* Refresh Token Expiry */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Refresh Token Expiry (days)
-            </label>
-            <div className="mt-1">
-              <input
-                {...register('refreshTokenExpiryDays', {
-                  required: 'Refresh token expiry is required',
-                  min: { value: 1, message: 'Minimum 1 day' },
-                  max: { value: 90, message: 'Maximum 90 days' },
-                  valueAsNumber: true,
-                })}
-                type="number"
-                min="1"
-                max="90"
-                className={`block w-full px-3 py-2 border ${
-                  errors.refreshTokenExpiryDays ? 'border-red-300' : 'border-gray-300'
-                } rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-              />
-              {errors.refreshTokenExpiryDays && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.refreshTokenExpiryDays.message}
-                </p>
-              )}
-              <p className="mt-1 text-sm text-gray-500">
-                Long-lived tokens for automatic refresh (1-90 days)
-              </p>
-            </div>
-          </div>
-
-          {/* Remember Me Token Expiry */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Remember Me Token Expiry (days)
-            </label>
-            <div className="mt-1">
-              <input
-                {...register('rememberMeTokenExpiryDays', {
-                  required: 'Remember me token expiry is required',
-                  min: { value: 1, message: 'Minimum 1 day' },
-                  max: { value: 365, message: 'Maximum 365 days' },
-                  valueAsNumber: true,
-                })}
-                type="number"
-                min="1"
-                max="365"
-                className={`block w-full px-3 py-2 border ${
-                  errors.rememberMeTokenExpiryDays ? 'border-red-300' : 'border-gray-300'
-                } rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-              />
-              {errors.rememberMeTokenExpiryDays && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.rememberMeTokenExpiryDays.message}
-                </p>
-              )}
-              <p className="mt-1 text-sm text-gray-500">
-                Extended expiry when "Remember Me" is checked (1-365 days)
-              </p>
-            </div>
-          </div>
-
-          {/* Error Display */}
-          {actionError && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-4">
-              <div className="flex">
-                <XMarkIcon className="h-5 w-5 text-red-400" />
-                <div className="ml-3">
-                  <p className="text-sm text-red-600">{actionError}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex justify-between space-x-4">
-            <div className="flex space-x-3">
-              <button
-                type="submit"
-                disabled={!isDirty || actionLoading}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {actionLoading ? (
-                  <LoadingSpinner size="small" />
-                ) : (
-                  <>
-                    <CheckIcon className="h-4 w-4 mr-2" />
-                    Save Changes
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={onReset}
-                disabled={actionLoading}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ArrowPathIcon className="h-4 w-4 mr-2" />
-                Reset to Defaults
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-
-      {/* Preset Configurations */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Presets</h2>
-        <p className="text-sm text-gray-600 mb-6">
-          Apply pre-configured token settings for common scenarios
-        </p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Object.entries(TOKEN_PRESETS).map(([key, preset]) => (
-            <div
-              key={key}
-              className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
-            >
-              <h3 className="text-sm font-medium text-gray-900">{preset.name}</h3>
-              <p className="text-xs text-gray-500 mt-1">{preset.description}</p>
-              <button
-                onClick={() => onApplyPreset(key)}
-                disabled={actionLoading}
-                className="mt-3 w-full inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Apply
-              </button>
-            </div>
+      {/* Preset Selection */}
+      <Card title="Choose Preset Configuration" style={{ marginBottom: '24px' }}>
+        <Row gutter={[16, 16]}>
+          {TOKEN_PRESETS.map(preset => (
+            <Col span={6} key={preset.name}>
+              {renderPresetCard(preset)}
+            </Col>
           ))}
-        </div>
-      </div>
+        </Row>
+      </Card>
 
-      {/* Dirty State Warning */}
-      {isDirty && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-          <div className="flex">
-            <CogIcon className="h-5 w-5 text-yellow-400" />
-            <div className="ml-3">
-              <p className="text-sm text-yellow-800">
-                You have unsaved changes. Don't forget to save your configuration.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Custom Configuration */}
+      <Card title="Custom Configuration">
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSaveConfig}
+          initialValues={currentConfig}
+          onFinishFailed={() => {
+            // Form validation failed
+          }}
+        >
+          <Row gutter={24}>
+            <Col span={8}>
+              <Form.Item
+                label="Access Token Lifetime (minutes)"
+                name="accessTokenExpiryMinutes"
+                rules={[
+                  { required: true, message: 'Please select access token lifetime' }
+                ]}
+              >
+                <Select
+                  placeholder="Select access token lifetime"
+                  onChange={handleCustomChange}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+                  }
+                >
+                  {ACCESS_TOKEN_OPTIONS.map(option => (
+                    <Option key={option.value} value={option.value}>
+                      {option.label}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            
+            <Col span={8}>
+              <Form.Item
+                label="Refresh Token Lifetime (days)"
+                name="refreshTokenExpiryDays"
+                rules={[
+                  { required: true, message: 'Please select refresh token lifetime' }
+                ]}
+              >
+                <Select
+                  placeholder="Select refresh token lifetime"
+                  onChange={handleCustomChange}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+                  }
+                >
+                  {REFRESH_TOKEN_OPTIONS.map(option => (
+                    <Option key={option.value} value={option.value}>
+                      {option.label}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            
+            <Col span={8}>
+              <Form.Item
+                label="Remember Me Token Lifetime (days)"
+                name="rememberMeTokenExpiryDays"
+                rules={[
+                  { required: true, message: 'Please select remember me token lifetime' }
+                ]}
+              >
+                <Select
+                  placeholder="Select remember me token lifetime"
+                  onChange={handleCustomChange}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+                  }
+                >
+                  {REMEMBER_TOKEN_OPTIONS.map(option => (
+                    <Option key={option.value} value={option.value}>
+                      {option.label}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider />
+
+          <Space>
+            <Button 
+              type="primary" 
+              loading={loading}
+              icon={<CheckCircleOutlined />}
+              onClick={async () => {
+                try {
+                  const formValues = await form.validateFields();
+                  await handleSaveConfig(formValues);
+                } catch {
+                  message.error('Please check all required fields');
+                }
+              }}
+            >
+              Apply Configuration
+            </Button>
+            <Button 
+              onClick={loadCurrentConfig}
+              icon={<ReloadOutlined />}
+            >
+              Reload
+            </Button>
+          </Space>
+        </Form>
+      </Card>
     </div>
   );
 };
