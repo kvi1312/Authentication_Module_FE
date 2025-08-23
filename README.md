@@ -2,10 +2,21 @@
 
 A modern React-based authentication and user management system with role-based access control.
 
-![React](https://img.shields.io/badge/React-18-blue.svg)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)
-![Vite](https://img.shields.io/badge/Vite-7.1.3-purple.svg)
-![Ant Design](https://img.shields.io/badge/Ant%20Design-5-red.svg)
+## 🔧 API Integration
+
+- **Authentication**: `/api/auth/*` endpoints
+- **User Management**: `/api/user/*` endpoints
+- **Admin Features**: `/api/admin/*` endpoints
+- **Proxy**: Vite dev server proxies `/api/*` to backend (port 1312)
+
+## 📋 Requirements
+
+- Node.js 20.19+ or 22.12+
+- Backend API: https://github.com/kvi1312/Authentication_Module_BE.git
+- Modern browser with ES6+ support//img.shields.io/badge/React-18-blue.svg)
+  ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)
+  ![Vite](https://img.shields.io/badge/Vite-7.1.3-purple.svg)
+  ![Ant Design](https://img.shields.io/badge/Ant%20Design-5-red.svg)
 
 ## ✨ Key Features
 
@@ -13,19 +24,54 @@ A modern React-based authentication and user management system with role-based a
 - **Admin Dashboard** - Complete user and role management interface
 - **Real-time Updates** - Live data synchronization without page reload
 - **Responsive Design** - Mobile-first UI with Ant Design components
-- **Docker Ready** - Production deployment with Nginx
+- **Production Ready** - Optimized build with TypeScript support
 
 ## 🚀 Quick Start
 
+### 1. Prerequisites
+
+- Node.js 20.19+ or 22.12+
+- Modern browser with ES6+ support
+
+### 2. Backend Setup
+
 ```bash
+# Clone and setup backend API
+git clone https://github.com/kvi1312/Authentication_Module_BE.git
+cd Authentication_Module_BE
+
+# Follow backend setup instructions
+# Ensure backend is running on port 1312
+```
+
+### 3. Frontend Setup
+
+```bash
+# Clone this repository
+git clone <this-repository-url>
+cd Authentication_Module_FE/authentication
+
 # Install dependencies
 npm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env if needed
 
 # Start development server
 npm run dev
 
+# Access frontend: http://localhost:5173
+```
+
+### 4. Production Build
+
+```bash
 # Build for production
 npm run build
+
+# Preview production build
+npm run preview
 ```
 
 ## 🏗️ Tech Stack
@@ -63,26 +109,22 @@ src/
 | Customer   | 1     | Basic features     |
 | Guest      | 7     | Read-only          |
 
-## 🐳 Docker Deployment
-
-```bash
-# Windows
-.\docker.bat start
-
-# Linux/Mac
-./docker.sh start
-
-# Access: http://localhost:3000
-```
-
 ## ⚙️ Configuration
 
 Create `.env` file:
 
 ```env
-VITE_API_URL=http://localhost:1312
+# API Configuration
+VITE_API_BASE_URL=
 VITE_APP_NAME=Authentication Module
+VITE_TOKEN_REFRESH_THRESHOLD=300000
 ```
+
+**Environment Variables:**
+
+- `VITE_API_BASE_URL`: Backend API base URL (empty for relative paths)
+- `VITE_APP_NAME`: Application display name
+- `VITE_TOKEN_REFRESH_THRESHOLD`: Token refresh threshold in milliseconds
 
 ## 🛠️ Development
 
