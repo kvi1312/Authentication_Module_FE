@@ -9,9 +9,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '../../hooks/useAuth';
 import { tokenService } from '../../services/tokenService';
-
 const { Text } = Typography;
-
 interface TimeRemaining {
   days: number;
   hours: number;
@@ -19,27 +17,22 @@ interface TimeRemaining {
   seconds: number;
   totalSeconds: number;
 }
-
 const TokenCountdown: React.FC = () => {
-  const { logout, refreshToken } = useAuth();
+  const { logout, refreshToken, isAdmin } = useAuth();
   const [accessTokenTime, setAccessTokenTime] = useState<TimeRemaining | null>(null);
   const [refreshTokenTime, setRefreshTokenTime] = useState<TimeRemaining | null>(null);
   const [isRememberMe, setIsRememberMe] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
   const calculateTimeRemaining = (expiresAt: Date): TimeRemaining => {
     const now = new Date().getTime();
     const expiry = expiresAt.getTime();
     const totalSeconds = Math.max(0, Math.floor((expiry - now) / 1000));
-
     const days = Math.floor(totalSeconds / (24 * 3600));
     const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-
     return { days, hours, minutes, seconds, totalSeconds };
   };
-
   const formatTimeForClock = (time: TimeRemaining): { 
     display: string; 
     parts: { days: string; hours: string; minutes: string; seconds: string } 
@@ -50,7 +43,6 @@ const TokenCountdown: React.FC = () => {
       minutes: time.minutes.toString().padStart(2, '0'),
       seconds: time.seconds.toString().padStart(2, '0')
     };
-
     if (time.days > 0) {
       return {
         display: `${parts.days}:${parts.hours}:${parts.minutes}:${parts.seconds}`,
@@ -63,7 +55,6 @@ const TokenCountdown: React.FC = () => {
       };
     }
   };
-
   const getStatusTag = (totalSeconds: number) => {
     if (totalSeconds <= 0) {
       return <Tag color="red" icon={<ExclamationCircleOutlined />}>EXPIRED</Tag>;
@@ -73,7 +64,6 @@ const TokenCountdown: React.FC = () => {
       return <Tag color="green" icon={<CheckCircleOutlined />}>ACTIVE</Tag>;
     }
   };
-
   const getCountdownStyle = (totalSeconds: number) => {
     if (totalSeconds <= 0) {
       return { backgroundColor: '#fff2f0', color: '#ff4d4f' };
@@ -83,57 +73,45 @@ const TokenCountdown: React.FC = () => {
       return { backgroundColor: '#f6ffed', color: '#52c41a' };
     }
   };
-
   const handleRefreshToken = React.useCallback(async () => {
     if (isRefreshing) return;
-    
     try {
       setIsRefreshing(true);
       await refreshToken();
-    } catch (error) {
-      console.error('Failed to refresh token:', error);
+    } catch (err) {
+      console.error('Error refreshing token:', err);
     } finally {
       setIsRefreshing(false);
     }
   }, [refreshToken, isRefreshing]);
-
   const handleLogout = React.useCallback(async () => {
     await logout();
   }, [logout]);
-
   useEffect(() => {
     const updateCountdowns = () => {
       const accessTokenExpiry = tokenService.getAccessTokenExpiry();
       const refreshTokenExpiry = tokenService.getRefreshTokenExpiry();
       const isRememberMeActive = tokenService.isRememberMeSession();
-
       if (accessTokenExpiry) {
         const accessTime = calculateTimeRemaining(accessTokenExpiry);
         setAccessTokenTime(accessTime);
       }
-
       if (refreshTokenExpiry) {
         const refreshTime = calculateTimeRemaining(refreshTokenExpiry);
         setRefreshTokenTime(refreshTime);
-
         if (refreshTime.totalSeconds <= 0) {
           handleLogout();
         }
       }
-
       setIsRememberMe(isRememberMeActive);
     };
-
     updateCountdowns();
     const interval = setInterval(updateCountdowns, 1000);
-
     return () => clearInterval(interval);
   }, [isRefreshing, handleRefreshToken, handleLogout]);
-
   if (!accessTokenTime && !refreshTokenTime) {
     return null;
   }
-
   return (
     <Card 
       title={
@@ -146,7 +124,7 @@ const TokenCountdown: React.FC = () => {
       style={{ marginBottom: '16px' }}
     >
       <Row gutter={[16, 16]}>
-        {/* Access Token Countdown */}
+        {}
         {accessTokenTime && (
           <Col xs={24} md={12}>
             <div>
@@ -157,7 +135,6 @@ const TokenCountdown: React.FC = () => {
                 </Space>
                 {getStatusTag(accessTokenTime.totalSeconds)}
               </div>
-              
               <div style={{ 
                 ...getCountdownStyle(accessTokenTime.totalSeconds),
                 padding: '12px',
@@ -191,12 +168,10 @@ const TokenCountdown: React.FC = () => {
                   </div>
                 )}
               </div>
-
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <Text type="secondary" style={{ fontSize: '11px' }}>
                   {accessTokenTime.totalSeconds > 0 ? 'Expires in' : 'Expired'}
                 </Text>
-                
                 {accessTokenTime.totalSeconds <= 300 && accessTokenTime.totalSeconds > 0 && (
                   <Text type="danger" style={{ fontSize: '10px', fontWeight: 'bold' }}>
                     ⚠️ Expiring soon!
@@ -206,8 +181,7 @@ const TokenCountdown: React.FC = () => {
             </div>
           </Col>
         )}
-
-        {/* Refresh Token Countdown */}
+        {}
         {refreshTokenTime && (
           <Col xs={24} md={12}>
             <div>
@@ -218,23 +192,24 @@ const TokenCountdown: React.FC = () => {
                 </Space>
                 <Space>
                   {getStatusTag(refreshTokenTime.totalSeconds)}
-                  <Button 
-                    type="text" 
-                    size="small"
-                    icon={<ReloadOutlined />}
-                    loading={isRefreshing}
-                    onClick={handleRefreshToken}
-                    style={{ 
-                      padding: '4px',
-                      minWidth: 'auto',
-                      height: '24px',
-                      width: '24px'
-                    }}
-                    title="Refresh Token"
-                  />
+                  {isAdmin() && (
+                    <Button 
+                      type="text" 
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      loading={isRefreshing}
+                      onClick={handleRefreshToken}
+                      style={{ 
+                        padding: '4px',
+                        minWidth: 'auto',
+                        height: '24px',
+                        width: '24px'
+                      }}
+                      title="Refresh Token"
+                    />
+                  )}
                 </Space>
               </div>
-              
               <div style={{ 
                 ...getCountdownStyle(refreshTokenTime.totalSeconds),
                 padding: '12px',
@@ -268,12 +243,10 @@ const TokenCountdown: React.FC = () => {
                   </div>
                 )}
               </div>
-              
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <Text type="secondary" style={{ fontSize: '11px' }}>
                   {refreshTokenTime.totalSeconds > 0 ? 'Session expires in' : 'Session ended'}
                 </Text>
-                
                 {refreshTokenTime.totalSeconds <= 3600 && refreshTokenTime.totalSeconds > 0 && (
                   <Text type="danger" style={{ fontSize: '10px', fontWeight: 'bold' }}>
                     ⚠️ Session ending soon!
@@ -283,8 +256,7 @@ const TokenCountdown: React.FC = () => {
             </div>
           </Col>
         )}
-
-        {/* Remember Me Status */}
+        {}
         {isRememberMe && (
           <Col xs={24}>
             <div style={{ 
@@ -308,5 +280,5 @@ const TokenCountdown: React.FC = () => {
     </Card>
   );
 };
-
 export default TokenCountdown;
+

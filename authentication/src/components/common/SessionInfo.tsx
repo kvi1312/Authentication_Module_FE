@@ -2,16 +2,12 @@ import React from 'react';
 import { Card, Tag, Typography, Space, Divider } from 'antd';
 import { ClockCircleOutlined, SafetyOutlined, GlobalOutlined } from '@ant-design/icons';
 import { useAuth } from '../../hooks/useAuth';
-
 const { Text } = Typography;
-
 const SessionInfo: React.FC = () => {
   const { isAuthenticated, user, isRememberMeSession } = useAuth();
-
   if (!isAuthenticated || !user) {
     return null;
   }
-
   const getSessionTypeInfo = () => {
     const isRememberMe = isRememberMeSession();
     return {
@@ -23,9 +19,7 @@ const SessionInfo: React.FC = () => {
         : 'Your session will expire when you close the browser'
     };
   };
-
   const sessionInfo = getSessionTypeInfo();
-
   return (
     <Card 
       size="small" 
@@ -42,16 +36,13 @@ const SessionInfo: React.FC = () => {
           <Text strong>User: </Text>
           <Text>{user.fullName} ({user.username})</Text>
         </div>
-        
         <div>
           <Text strong>Session Type: </Text>
           <Tag color={sessionInfo.color} icon={sessionInfo.icon}>
             {sessionInfo.type}
           </Tag>
         </div>
-        
         <Divider style={{ margin: '8px 0' }} />
-        
         <Text type="secondary" style={{ fontSize: '12px' }}>
           {sessionInfo.description}
         </Text>
@@ -59,5 +50,5 @@ const SessionInfo: React.FC = () => {
     </Card>
   );
 };
-
 export default SessionInfo;
+

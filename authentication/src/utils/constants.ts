@@ -1,7 +1,6 @@
 export const API_BASE_URL = '';
 export const APP_NAME = import.meta.env.VITE_APP_NAME || 'Authentication Module';
 export const TOKEN_REFRESH_THRESHOLD = Number(import.meta.env.VITE_TOKEN_REFRESH_THRESHOLD) || 300000;
-
 export const API_ENDPOINTS = {
   AUTH: {
     REGISTER: '/api/auth/register',
@@ -15,7 +14,6 @@ export const API_ENDPOINTS = {
     TOKEN_CONFIG_PRESET: (preset: string) => `/api/admin/token-config/preset/${preset}`
   }
 } as const;
-
 export const TOKEN_PRESETS = {
   'very-short': {
     name: 'Very Short',
@@ -34,7 +32,6 @@ export const TOKEN_PRESETS = {
     description: '60min access, 30 days refresh, 90 days remember'
   }
 } as const;
-
 export const STORAGE_KEYS = {
   ACCESS_TOKEN: 'auth_access_token',
   TOKEN_EXPIRES_AT: 'auth_token_expires_at',
@@ -44,13 +41,11 @@ export const STORAGE_KEYS = {
   REMEMBER_ME_TOKEN_EXPIRES_AT: 'auth_remember_me_token_expires_at',
   USER_INFO: 'auth_user_info'
 } as const;
-
 export const USER_TYPE_LABELS = {
   0: 'Admin',
   1: 'Partner', 
   2: 'End User'
 } as const;
-
 export const VALIDATION_RULES = {
   EMAIL: {
     REQUIRED: 'Email is required',
@@ -76,11 +71,8 @@ export const VALIDATION_RULES = {
     REQUIRED: 'Last name is required'
   }
 } as const;
-
 export const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/;
-
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 export const DEFAULT_TOKEN_CONFIG = {
   accessTokenExpiryMinutes: 30,
   refreshTokenExpiryDays: 7,
@@ -89,3 +81,4 @@ export const DEFAULT_TOKEN_CONFIG = {
   refreshTokenExpiryDisplay: '7 days',
   rememberMeTokenExpiryDisplay: '30 days'
 } as const;
+

@@ -49,7 +49,6 @@ const UserManagementSimple: React.FC = () => {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      // Mock data for demonstration
       const mockUsers: User[] = [
         {
           id: '1',
@@ -118,9 +117,9 @@ const UserManagementSimple: React.FC = () => {
       
       setUsers(mockUsers);
       message.success('Users loaded successfully');
-    } catch (error) {
-      message.error('Failed to load users');
-      console.error('Load users error:', error);
+    } catch (err) {
+      console.error('Error loading users:', err);
+      message.error(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
       setLoading(false);
     }

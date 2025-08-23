@@ -3,30 +3,23 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Layout, 
   Menu, 
-  Dropdown, 
   Avatar, 
   Space, 
   Button, 
-  Typography,
-  Tag
+  Typography
 } from 'antd';
 import {
   UserOutlined,
   LogoutOutlined
 } from '@ant-design/icons';
-import { useAuth, usePermissions } from '../../hooks/useAuth';
-import { APP_NAME, USER_TYPE_LABELS } from '../../utils/constants';
+import { useAuth } from '../../hooks/useAuth';
+import { APP_NAME } from '../../utils/constants';
 import toast from 'react-hot-toast';
-import type { UserInfo } from '../../types/auth.types';
-
 const { Header } = Layout;
 const { Text } = Typography;
-
 const Navigation: React.FC = () => {
-  const { isAuthenticated, user, logout } = useAuth();
-  const { isAdmin, isPartner } = usePermissions();
+  const { isAuthenticated, user, logout, isAdmin, isPartner } = useAuth();
   const navigate = useNavigate();
-
   const handleLogout = async () => {
     try {
       await logout();
@@ -36,39 +29,11 @@ const Navigation: React.FC = () => {
       toast.error('Logout failed');
     }
   };
-
-  const getUserDisplayRole = (user: UserInfo | null) => {
-    if (!user) return 'User';
-    if (user.roles?.includes('SuperAdmin')) return 'Super Admin';
-    if (user.roles?.includes('Admin')) return 'Admin';
-    if (user.roles?.includes('Partner')) return 'Partner';
-    return USER_TYPE_LABELS[user.userType as keyof typeof USER_TYPE_LABELS] || 'User';
-  };
-
-  const menuItems = [
-    {
-      key: 'profile',
-      icon: <UserOutlined />,
-      label: (
-        <Link to="/profile" style={{ textDecoration: 'none', color: 'inherit' }}>
-          Profile
-        </Link>
-      )
-    },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: 'Logout',
-      onClick: handleLogout
-    }
-  ];
-
   const navigationItems = [
     { key: 'dashboard', label: 'Dashboard', href: '/dashboard', show: isAuthenticated },
-    { key: 'admin', label: 'Admin Panel', href: '/admin', show: isAuthenticated && isAdmin },
-    { key: 'partner', label: 'Partner Portal', href: '/partner', show: isAuthenticated && isPartner },
+    { key: 'admin', label: 'Admin Panel', href: '/admin', show: isAuthenticated && isAdmin() },
+    { key: 'partner', label: 'Partner Portal', href: '/partner', show: isAuthenticated && isPartner() },
   ].filter(item => item.show);
-
   return (
     <Header style={{ 
       background: '#fff', 
@@ -78,15 +43,14 @@ const Navigation: React.FC = () => {
       alignItems: 'center',
       justifyContent: 'space-between'
     }}>
-      {/* Logo */}
+      {}
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <Link to="/" style={{ textDecoration: 'none' }}>
           <Text strong style={{ fontSize: '18px', color: '#1890ff' }}>
             {APP_NAME}
           </Text>
         </Link>
-        
-        {/* Navigation Menu */}
+        {}
         {isAuthenticated && navigationItems.length > 0 && (
           <Menu
             mode="horizontal"
@@ -102,34 +66,32 @@ const Navigation: React.FC = () => {
           />
         )}
       </div>
-
-      {/* User Section */}
+      {}
       <div style={{ display: 'flex', alignItems: 'center' }}>
         {isAuthenticated ? (
-          <Dropdown
-            menu={{ 
-              items: menuItems.map(item => ({
-                ...item,
-                onClick: item.onClick || (() => {
-                  if (item.key === 'profile') {
-                    navigate('/profile');
-                  }
-                })
-              }))
-            }}
-            placement="bottomRight"
-            trigger={['click']}
-          >
-            <Space style={{ cursor: 'pointer', padding: '8px' }}>
+          <Space size="large">
+            {}
+            <Space style={{ cursor: 'pointer', padding: '8px' }} onClick={() => navigate('/profile')}>
               <Avatar icon={<UserOutlined />} />
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                 <Text strong style={{ fontSize: '14px' }}>{user?.fullName}</Text>
-                <Tag color="blue" style={{ fontSize: '10px' }}>
-                  {getUserDisplayRole(user)}
-                </Tag>
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  {user?.email}
+                </Text>
               </div>
             </Space>
-          </Dropdown>
+            {}
+            <Button 
+              type="text" 
+              icon={<LogoutOutlined />}
+              onClick={handleLogout}
+              danger
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center'
+              }}
+            />
+          </Space>
         ) : (
           <Space>
             <Link to="/login">
@@ -144,5 +106,5 @@ const Navigation: React.FC = () => {
     </Header>
   );
 };
-
 export default Navigation;
+
