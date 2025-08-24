@@ -30,7 +30,7 @@ A modern React-based authentication and user management system with role-based a
 
 ### 1. Prerequisites
 
-- Node.js 20.19+ or 22.12+
+- Require latest node version for best experience
 - Modern browser with ES6+ support
 
 ### 2. Backend Setup
@@ -57,6 +57,14 @@ npm install
 # Configure environment
 cp .env.example .env
 # Edit .env if needed
+
+```bash
+
+# API Configuration
+VITE_API_BASE_URL=
+VITE_APP_NAME=Authentication Module
+VITE_TOKEN_REFRESH_THRESHOLD=300000
+```
 
 # Start development server
 npm run dev
